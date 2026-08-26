@@ -3,7 +3,7 @@ import Link from "next/link";
 import { SiteFooter } from "@/components/ui/SiteFooter";
 
 export const metadata: Metadata = {
-  title: "About — glass2mdl",
+  title: "About · glass2mdl",
   description:
     "What glass2mdl does: fits render-ready MDL materials for Iray in 3ds Max from the visible-light values on a glazing manufacturer's cutsheet.",
 };
@@ -21,54 +21,54 @@ export default function About() {
       </header>
 
       <main className="mx-auto w-full max-w-[720px] flex-1 px-5 py-8">
-        <h1 className="text-xl font-semibold tracking-tight">
-          Cutsheet numbers in, render-ready glass out
+        <h1 className="text-base font-semibold">
+          Simulation-ready glazing materials, based on manufacturer data
         </h1>
 
         <div className="mt-5 space-y-5 text-sm leading-relaxed text-foreground">
           <p>
-            Glazing manufacturers publish how a finished assembly performs: the visible
-            transmittance and the two reflectances printed on every cutsheet. Renderers want
-            something different, which is the optical properties of each surface. Bridging that
-            gap by eye produces glass that reads wrong from one side, reflects too much or too
-            little, or leaks light the real product would absorb.
+            glass2mdl turns the numbers on a glazing manufacturer&apos;s cutsheet into MDL
+            materials for Iray in 3ds Max. The output is rigorously tested against measured
+            renders. Glass made with this tool transmits, reflects, and absorbs exactly the
+            light the cutsheet says it should, and it looks physically correct from both
+            sides. Coated products keep their asymmetric reflections. The fit check shows you
+            the proof before you download.
           </p>
           <p>
-            glass2mdl closes the gap with the actual math. You describe the build-up the way the
-            cutsheet does: how many lites, their thickness and substrate, where the coating sits,
-            any frit. Then you type the three visible-light values from the performance table.
-            The tool solves for per-lite material properties whose rendered assembly, including
-            the light bouncing between lites, reproduces your numbers, and it shows you the proof
-            before you download.
-          </p>
-
-          <h2 className="pt-2 text-sm font-semibold">What you get</h2>
-          <p>
-            Materials in NVIDIA&apos;s MDL format for Iray for 3ds Max, packaged two ways.{" "}
-            <span className="font-medium">Planar geometry</span> gives one material for openings
-            modeled as flat planes. <span className="font-medium">Solid lites geometry</span>{" "}
-            gives each lite of the IGU its own material with per-face surfaces, so reflections
-            stack the way real insulated units do; that ZIP also includes a 3ds Max script that
-            finds your glazing, tags its faces, and assigns every material for you.
+            You describe the build-up the way the cutsheet does (lites, thicknesses, substrates,
+            coating placement, any frit) and type the three values from the performance
+            table. The tool solves for per-lite material properties whose rendered
+            assembly, including the light bouncing between lites, reproduces those numbers.
           </p>
 
-          <h2 className="pt-2 text-sm font-semibold">What it is honest about</h2>
+          <h2 className="pt-2 text-base font-semibold">Outputs</h2>
           <p>
-            The tool reproduces visible-light appearance for rendering. It is not a substitute
-            for thermal or daylight analysis. And because a single transmittance value cannot
-            determine a color spectrum, glass color is a physically sensible estimate from your
-            substrate choice unless the datasheet publishes color data, which you can enter.
+            <span className="font-medium">Planar geometry</span>: one material for openings
+            modeled as flat planes.
+          </p>
+          <p>
+            <span className="font-medium">Solid lites geometry</span>: each lite as a real
+            solid with per-face surfaces, so reflections stack the way real insulated units
+            do. That ZIP includes a 3ds Max script that finds your glazing, tags its faces,
+            and assigns every material for you.
           </p>
 
-          <h2 className="pt-2 text-sm font-semibold">Who made this</h2>
+          <h2 className="pt-2 text-base font-semibold">Honesty</h2>
           <p>
-            Built by Jeff Thompson, who works in architectural visualization and daylighting and
-            wanted glazing in renders to behave like the products being specified. More
-            experiments live at{" "}
+            This is visible-light appearance for rendering and point-in-time calculations, not
+            thermal or annual daylight analysis. Glass color is a physically sensible estimate
+            from your substrate choice unless the datasheet publishes color data, which you
+            can enter.
+          </p>
+
+          <h2 className="pt-2 text-base font-semibold">Built by</h2>
+          <p>
+            Jeff has 10 years of experience in lighting design, architectural visualization,
+            and daylight analysis. More experiments at{" "}
             <a href="https://thompsonjeff.com" className="text-accent transition hover:opacity-80">
               thompsonjeff.com
             </a>
-            . Questions or bugs:{" "}
+            ; questions or bugs to{" "}
             <a href="mailto:jt@thompsonjeff.com" className="text-accent transition hover:opacity-80">
               jt@thompsonjeff.com
             </a>

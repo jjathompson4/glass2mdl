@@ -69,7 +69,7 @@ export function GlassColorPanel() {
   return (
     <div className="space-y-3">
       <p className="rounded-md bg-surface-sunken px-2.5 py-2 text-xs leading-snug text-muted">
-        These are the colors of the whole assembly — every lite and any coating together, not a
+        These are the colors of the whole assembly: every lite and any coating together, not a
         single lite. Your substrate choices already produce them. Adjust one only if the
         datasheet prints color values, or you are matching a physical sample.
       </p>

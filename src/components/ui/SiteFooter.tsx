@@ -8,7 +8,7 @@ export function SiteFooter({ showAbout = true }: { showAbout?: boolean }) {
       <div className="mx-auto flex max-w-6xl flex-col items-center gap-1.5 text-center text-xs text-muted">
         <p>
           Reproduces visible-light appearance for rendering. Not a substitute for thermal or
-          daylight analysis.
+          annual daylight analysis.
         </p>
         <p>
           {showAbout ? (

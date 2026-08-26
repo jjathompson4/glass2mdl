@@ -30,7 +30,7 @@ export function AssemblySection() {
     <Section
       id="card-cutsheet"
       title="Cutsheet values"
-      description="The three visible-light values from the performance table. Behind the scenes, the tool fits each lite's material properties so the rendered assembly reproduces these numbers — the verdict beside the diagram tracks how closely."
+      description="The three visible-light values from the performance table. Behind the scenes, the tool fits each lite's material properties so the rendered assembly reproduces these numbers; the verdict beside the diagram tracks how closely."
     >
       {/* Typed values are never rewritten — an impossible pair gets flagged
           below instead of being silently corrected. */}

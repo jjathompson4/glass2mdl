@@ -272,7 +272,7 @@ def _analyze_lite(obj, plane_tol, max_thickness):
 def _analyze_loops(loops, plane_tol, max_thickness):
     clusters = _cluster_faces(loops, plane_tol)
     if len(clusters) < 3:
-        return None, "fewer than 3 planar face groups — not a solid lite"
+        return None, "fewer than 3 planar face groups (not a solid lite)"
     clusters.sort(key=lambda c: c["area"], reverse=True)
     a, b = clusters[0], clusters[1]
     if _dot(a["n"], b["n"]) > -0.98:
@@ -371,7 +371,7 @@ def _pick_exterior(groups):
         # Fall back to one consistent side and let qa() + flip_all() decide.
         base = axes[0]
         axes = [a if _dot(a, base) >= 0 else _v_scale(a, -1.0) for a in axes]
-        print("g2m: exterior direction ambiguous (flat facade?) — picked a "
+        print("g2m: exterior direction ambiguous (flat facade?): picked a "
               "consistent side. Check qa(); flip_all() reverses everything.")
     for g, axis in zip(groups, axes):
         for rec in g:
@@ -529,7 +529,7 @@ def tag(pattern=None, convert=True, plane_tol_mm=1.0, max_thickness_mm=60.0,
         return
     objs = _candidates(pattern)
     if not objs:
-        print("Nothing to tag — select objects or pass a pattern like '*glass*'.")
+        print("Nothing to tag. Select objects or pass a pattern like '*glass*'.")
         return
 
     plane_tol = _mm(plane_tol_mm)
@@ -950,7 +950,7 @@ def bind(type_map=None, material_factory=None):
     print("g2m: bound %d objects to %d Multi-Sub materials; %d unmatched."
           % (bound, len(multis), unmatched))
     if material_factory is None and multis:
-        print("Slots are empty by design — drag the glass2mdl materials from")
+        print("Slots are empty by design. Drag the glass2mdl materials from")
         print("the browser into each Multi-Sub once (per type, not per IGU):")
         for (prefix, position), mm in sorted(multis.items()):
             print("  %s  <- module material '%s_%s' (per-face names arrive "
@@ -1025,7 +1025,7 @@ def check_selection(max_faces=2000, min_pane_mm=200.0, plane_tol_mm=1.0,
         return []
     sel = list(rt.selection)
     if not sel:
-        print("g2m: nothing selected. Select your glazing solids first — each"
+        print("g2m: nothing selected. Select your glazing solids first, each"
               " lite as its own object.")
         return []
     plane_tol = _mm(plane_tol_mm)
@@ -1043,7 +1043,7 @@ def check_selection(max_faces=2000, min_pane_mm=200.0, plane_tol_mm=1.0,
             ok.append(obj)
     print("g2m: %d of %d selected objects look like lites." % (len(ok), len(sel)))
     for name, why in bad[:15]:
-        print("  not a lite — %s: %s" % (name, why))
+        print("  not a lite, %s: %s" % (name, why))
     if len(bad) > 15:
         print("  ... and %d more" % (len(bad) - 15))
     if ok and not bad:
@@ -1075,7 +1075,7 @@ def probe_manifest(manifest):
     mat = create_iray_mdl_material(spec["type_name"], dict(spec.get("params", {})),
                                    name="g2m_probe")
     if mat is not None:
-        print("g2m: module resolves — ready to assign.")
+        print("g2m: module resolves. Ready to assign.")
         return True
     return False
 
@@ -1163,7 +1163,7 @@ def show_gui():
     # 1 - Select
     lay1 = group("1 · Select the glazing",
                  "In the viewport, select the glazing solids you want to "
-                 "convert — each lite as its own object — then check them "
+                 "convert (each lite as its own object), then check them "
                  "here. Nothing is modified by the check.")
     row1 = QtWidgets.QHBoxLayout()
     btn_check = QtWidgets.QPushButton("Check my selection")
@@ -1209,7 +1209,7 @@ def show_gui():
     lay3 = group("3 · Assign the real materials",
                  "Point at the bind_manifest.json inside the downloaded, "
                  "unzipped export folder. The export folder must sit DIRECTLY "
-                 "under a folder listed in Iray+ settings > MDL search paths — "
+                 "under a folder listed in Iray+ settings > MDL search paths; "
                  "choosing the manifest checks this for you before any material "
                  "is assigned.")
     row3a = QtWidgets.QHBoxLayout()
@@ -1259,7 +1259,7 @@ def show_gui():
             print("g2m: manifest loaded; %d glazing type(s): %s"
                   % (len(keys), ", ".join(keys)))
             if not multi:
-                print("  One type only — Assign materials applies it to everything tagged.")
+                print("  One type only: Assign materials applies it to everything tagged.")
             print("  Export folder: %s" % export_dir)
             print("  Its parent must be an Iray+ MDL search path: %s"
                   % os.path.dirname(export_dir))
@@ -1311,7 +1311,7 @@ def show_gui():
                     strays[cur] = strays.get(cur, 0) + 1
             for t, n in sorted(strays.items()):
                 print("g2m: %d lites are typed '%s', which this manifest does"
-                      " not offer — left alone. Select them and Mark as one"
+                      " not offer; left alone. Select them and Mark as one"
                       " of: %s" % (n, t, ", ".join(sorted(keys))))
         bind(material_factory=make_iray_mdl_factory(manifest))
     btn_bind.clicked.connect(lambda: run(do_bind))

@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "glass2mdl — glazing cutsheets to MDL materials",
+  title: "glass2mdl · glazing cutsheets to MDL materials",
   description:
     "Turn manufacturer glazing performance data into NVIDIA MDL materials for Iray in 3ds Max. Handles single, double, and triple IGUs, low-e and reflective coatings, tinted substrates, and frit.",
 };
