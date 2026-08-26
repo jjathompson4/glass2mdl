@@ -144,7 +144,7 @@ so frit stays UV-based and coverage % is the spec.
 | **Preview scope** | Deferred by decision. An approximation was built and deleted — see below. Leading idea: a viewing-conditions panel (clear day / overcast / dusk / **night with interior lights**), exterior/interior, orbit for glancing angles, light-balance slider. Whatever is chosen, the render API's `RenderScene` enum should be updated to match so both previews speak the same vocabulary. |
 | **GPU render infra** | API-first was agreed; infra never chosen. Options were serverless cloud GPU (Modal/RunPod, cents per render) vs. your own NVIDIA hardware behind a tunnel. Contract is already written in `src/engine/renderApi/contract.ts`. |
 | **Observer handling** | 2° vs 10° is captured as metadata only; conversion uses the 2°-based sRGB matrices. Fine for now — the error is below our other approximations — but revisit if colour accuracy ever gets tightened. |
-| **Git / hosting** | Repo has create-next-app's initial commit and ~18 uncommitted changes. Nothing pushed anywhere. Never asked to commit. |
+| **Git / hosting** | **Committed and pushed 2026-08-25** to the private repo github.com/jjathompson4/glass2mdl (repo name doesn't lock the product name; GitHub renames redirect). CI workflow runs on push; the `mdl-compile-check` job stays reserved (`if: false`) until the render service lands. |
 | **Vercel deploy** | Never deployed. |
 
 ---
