@@ -128,7 +128,7 @@ function FitTable({
         <p className="mt-2 text-xs leading-snug text-muted">
           The fit returns the closest achievable values instead. Usually this means the entered
           numbers belong to a different construction. Check the lite count, the coated surface,
-          and the substrate tints against the cutsheet.
+          and the substrate tints against the data sheet.
         </p>
       ) : null}
     </div>

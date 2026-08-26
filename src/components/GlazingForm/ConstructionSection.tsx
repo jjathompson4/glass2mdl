@@ -34,7 +34,7 @@ export function ConstructionSection() {
   return (
     <Section
       title="Construction"
-      description="The build-up from the cutsheet header: lites and the gaps between them."
+      description="The build-up from the data sheet header: lites and the gaps between them."
       action={
         <SegmentedControl
           ariaLabel="Number of lites"

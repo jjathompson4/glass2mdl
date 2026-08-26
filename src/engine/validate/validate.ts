@@ -95,7 +95,7 @@ export function validateSystem(input: GlazingSystemInput): ValidationIssue[] {
       severity: "error",
       code: "multiple-coatings",
       message:
-        "Only one coating can be fitted at a time. A second coating has no measurement left to fit against on a cutsheet that reports one set of assembly values.",
+        "Only one coating can be fitted at a time. A second coating has no measurement left to fit against on a data sheet that reports one set of assembly values.",
       field: "lites",
     });
   }
@@ -176,7 +176,7 @@ export function validateSystem(input: GlazingSystemInput): ValidationIssue[] {
       code: "energy-exceeded",
       message: `Transmittance (${(assembly.tvis * 100).toFixed(0)}%) plus exterior reflectance (${(
         assembly.rvisExt * 100
-      ).toFixed(0)}%) exceeds 100%. Check the cutsheet columns.`,
+      ).toFixed(0)}%) exceeds 100%. Check the data sheet columns.`,
       field: "assembly.tvis",
     });
   } else if (outbound > 0.97) {

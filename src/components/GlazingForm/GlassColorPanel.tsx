@@ -181,7 +181,7 @@ function ColorEditor({
           />
           <p className="text-[11px] leading-snug text-muted">
             Only the hue is used. How light or dark the glass is stays set by your {row.metric} in
-            Cutsheet values.
+            Data sheet values.
           </p>
         </div>
       ) : null}
@@ -258,7 +258,7 @@ function TypedInputs({
           <LightnessCheck L={spec.L} level={level} metric={row.metric} />
           <p className="text-[11px] leading-snug text-muted/80">
             Only a* and b* (the hue) are used. Brightness comes from your {row.metric} in
-            Cutsheet values, so L* just gets cross-checked against it.
+            Data sheet values, so L* just gets cross-checked against it.
           </p>
         </>
       ) : (
@@ -272,7 +272,7 @@ function TypedInputs({
             </Compact>
           </div>
           <p className="text-[11px] leading-snug text-muted/80">
-            Chromaticity carries the hue only; brightness stays set by your {row.metric} in Cutsheet values.
+            Chromaticity carries the hue only; brightness stays set by your {row.metric} in Data sheet values.
           </p>
         </>
       )}
@@ -294,7 +294,7 @@ function LightnessCheck({ L, level, metric }: { L: number; level: number; metric
   ) : (
     <p className="text-[11px] text-warning">
       L* {L.toFixed(1)} ≈ {(implied * 100).toFixed(0)}%, but {(level * 100).toFixed(0)}% was entered
-      in Cutsheet values. Check both came from the same product row.
+      in Data sheet values. Check both came from the same product row.
     </p>
   );
 }

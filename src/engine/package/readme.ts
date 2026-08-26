@@ -163,7 +163,7 @@ export function buildReadme(options: {
     "",
     "WHAT WAS FITTED",
     "---------------",
-    "Cutsheet values you entered, and what the generated materials produce:",
+    "Data sheet values you entered, and what the generated materials produce:",
     "",
     `                          entered     fitted`,
     `  Transmittance (VLT)     ${pct(input.assembly.tvis).padStart(7)}   ${pct(

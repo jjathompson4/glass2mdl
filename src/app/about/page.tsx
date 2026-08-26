@@ -5,7 +5,7 @@ import { SiteFooter } from "@/components/ui/SiteFooter";
 export const metadata: Metadata = {
   title: "About · glass2mdl",
   description:
-    "What glass2mdl does: fits render-ready MDL materials for Iray in 3ds Max from the visible-light values on a glazing manufacturer's cutsheet.",
+    "What glass2mdl does: fits render-ready MDL materials for Iray in 3ds Max from the visible-light values on a glazing manufacturer's data sheet.",
 };
 
 export default function About() {
@@ -34,10 +34,11 @@ export default function About() {
             reflections. The fit check shows you the proof before you download.
           </p>
           <p>
-            You describe the build-up the way the cutsheet does (lites, thicknesses, substrates,
-            coating placement, any frit) and type the three values from the performance
-            table. The tool solves for per-lite material properties whose rendered
-            assembly, including the light bouncing between lites, reproduces those numbers.
+            You build the configuration exactly as the datasheet describes (lites, thicknesses,
+            substrates, coating placement, any frit) and type the three visible light values
+            from the performance table. The tool solves for per-lite material properties whose
+            rendered assembly, including the light bouncing between lites, reproduces those
+            numbers.
           </p>
 
           <h2 className="pt-2 text-base font-semibold">Outputs</h2>

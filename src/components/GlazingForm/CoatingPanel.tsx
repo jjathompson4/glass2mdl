@@ -72,7 +72,7 @@ export function CoatingOverridesPanel({
   return (
     <div className="space-y-2.5">
       <p className="rounded-md bg-surface-sunken px-2.5 py-2 text-xs leading-snug text-muted">
-        Cutsheets describe the whole assembly, not the coating itself, so the tool works the
+        Data sheets describe the whole assembly, not the coating itself, so the tool works the
         coating&apos;s own optical values out from your three numbers. They are shown read-only here and
         in the Download card&apos;s fit check. Override one only when the manufacturer publishes it directly.
       </p>

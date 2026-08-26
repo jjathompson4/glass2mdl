@@ -29,7 +29,7 @@ export function AssemblySection() {
   return (
     <Section
       id="card-cutsheet"
-      title="Cutsheet values"
+      title="Data sheet values"
       description="The three visible-light values from the performance table. Behind the scenes, the tool fits each lite's material properties so the rendered assembly reproduces these numbers. Warnings will appear if the fit is unrealistic."
     >
       {/* Typed values are never rewritten — an impossible pair gets flagged
@@ -92,8 +92,7 @@ export function AssemblySection() {
         )}
         {!over ? (
           <p className="mt-1 text-xs text-muted/80">
-            Absorption is never entered: cutsheets don&apos;t print it, because it is exactly what
-            the other two leave over.
+            Absorption is calculated from the values entered above.
           </p>
         ) : null}
       </div>
