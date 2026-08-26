@@ -979,14 +979,17 @@ def report():
 
 
 def clear_tags():
+    """Reset every g2m stamp — including the product type, which otherwise
+    survives in the scene and can bleed into the next product's bind."""
     if rt is None:
         print("Run inside 3ds Max.")
         return
     n = 0
     for obj in _tagged_objects():
         rt.setUserProp(obj, PROP_TAGGED, "0")
+        rt.setUserProp(obj, PROP_TYPE, "")
         n += 1
-    print("g2m: cleared %d tags." % n)
+    print("g2m: cleared %d tags (types included)." % n)
 
 
 def build_test_scene():
@@ -1271,17 +1274,44 @@ def show_gui():
         if not manifest:
             print("g2m: choose the bind_manifest.json first.")
             return
-        if len(manifest) == 1:
-            # One type in the manifest: stamping every un-typed tagged lite
-            # with it is the only sensible meaning of "bind".
-            only = next(iter(manifest))
-            stamped = 0
+        keys = set(manifest)
+
+        def current_type(obj):
+            cur = rt.getUserProp(obj, PROP_TYPE)
+            return str(cur) if cur not in (None, "", "undefined") else None
+
+        if len(keys) == 1:
+            # One type in the manifest: Bind means "apply THIS product to
+            # everything tagged". Type stamps from an earlier product are
+            # stale state, not intent — overwrite them, and say so.
+            only = next(iter(keys))
+            stamped = restamped = 0
             for obj in _tagged_objects():
-                if rt.getUserProp(obj, PROP_TYPE) is None:
-                    rt.setUserProp(obj, PROP_TYPE, only)
+                cur = current_type(obj)
+                if cur == only:
+                    continue
+                rt.setUserProp(obj, PROP_TYPE, only)
+                if cur is None:
                     stamped += 1
+                else:
+                    restamped += 1
             if stamped:
                 print("g2m: stamped %d untyped lites as '%s'." % (stamped, only))
+            if restamped:
+                print("g2m: re-stamped %d lites from an earlier product to '%s'."
+                      % (restamped, only))
+        else:
+            # Several types: stamps are meaningful, but a stamp this manifest
+            # doesn't know would bind nothing — say which and how to fix it.
+            strays = {}
+            for obj in _tagged_objects():
+                cur = current_type(obj)
+                if cur is not None and cur not in keys:
+                    strays[cur] = strays.get(cur, 0) + 1
+            for t, n in sorted(strays.items()):
+                print("g2m: %d lites are typed '%s', which this manifest does"
+                      " not offer — left alone. Select them and Mark as one"
+                      " of: %s" % (n, t, ", ".join(sorted(keys))))
         bind(material_factory=make_iray_mdl_factory(manifest))
     btn_bind.clicked.connect(lambda: run(do_bind))
 
