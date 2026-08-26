@@ -84,7 +84,7 @@ export function ResultSection({
 
       <p className="mt-2 text-[11px] leading-snug text-muted">
         {mode === "volumetric"
-          ? "In 3ds Max, the bundled manifest lets glass2mdl's Max script tag the faces and assign every material automatically. The README covers the manual route."
+          ? "Unzip so the export folder sits directly under an Iray MDL search path. In 3ds Max, the bundled manifest lets glass2mdl's Max script tag the faces and assign every material automatically; the README covers the manual route."
           : "The README says which material goes on which plane, with face normals pointing outward."}
       </p>
       <p className="mt-1.5 border-t border-border-subtle pt-2 text-[11px] leading-snug text-muted/80">

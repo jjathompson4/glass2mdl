@@ -957,15 +957,22 @@ def bind(type_map=None, material_factory=None):
 
 
 def report():
+    """What is tagged, grouped how, typed as what."""
     if rt is None:
         print("Run inside 3ds Max.")
         return
     tagged = _tagged_objects()
     igus = {}
+    types = {}
     for obj in tagged:
         igus.setdefault(str(rt.getUserProp(obj, PROP_IGU)), []).append(
             (str(obj.name), str(rt.getUserProp(obj, PROP_POSITION))))
+        t = rt.getUserProp(obj, PROP_TYPE)
+        key = str(t) if t is not None else "(untyped)"
+        types[key] = types.get(key, 0) + 1
     print("g2m: %d tagged lites in %d IGUs." % (len(tagged), len(igus)))
+    for t, n in sorted(types.items()):
+        print("  type %s: %d lites" % (t, n))
     for key in sorted(igus, key=lambda k: int(k) if k.isdigit() else 0):
         listing = ", ".join("%s(%s)" % pair for pair in igus[key])
         print("  IGU %s: %s" % (key, listing))
@@ -1005,24 +1012,68 @@ def build_test_scene():
           % len(made))
 
 
-def report():
-    """What is tagged, grouped how, typed as what."""
+def check_selection(max_faces=2000, min_pane_mm=200.0, plane_tol_mm=1.0,
+                    max_thickness_mm=60.0):
+    """Probe the current selection: which objects can be tagged as lites, and
+    why not otherwise. Touches nothing — this is the pre-flight for tag()."""
     if rt is None:
         print("Run inside 3ds Max.")
-        return
-    tagged = _tagged_objects()
-    igus = {}
-    for obj in tagged:
-        key = str(rt.getUserProp(obj, PROP_IGU))
-        igus.setdefault(key, []).append(obj)
-    types = {}
-    for obj in tagged:
-        t = rt.getUserProp(obj, PROP_TYPE)
-        types[str(t) if t is not None else "(untyped)"] = \
-            types.get(str(t) if t is not None else "(untyped)", 0) + 1
-    print("g2m: %d tagged lites in %d IGUs." % (len(tagged), len(igus)))
-    for t, n in sorted(types.items()):
-        print("  %s: %d lites" % (t, n))
+        return []
+    sel = list(rt.selection)
+    if not sel:
+        print("g2m: nothing selected. Select your glazing solids first — each"
+              " lite as its own object.")
+        return []
+    plane_tol = _mm(plane_tol_mm)
+    max_thickness = _mm(max_thickness_mm)
+    min_pane = _mm(min_pane_mm)
+    ok, bad = [], []
+    for obj in sel:
+        rec, why = _probe_lite(obj, plane_tol, max_thickness, max_faces)
+        if rec is not None and rec["extent_min"] < min_pane:
+            rec, why = None, ("narrower than %.0fmm in-plane (frame profile?)"
+                              % min_pane_mm)
+        if rec is None:
+            bad.append((str(obj.name), why))
+        else:
+            ok.append(obj)
+    print("g2m: %d of %d selected objects look like lites." % (len(ok), len(sel)))
+    for name, why in bad[:15]:
+        print("  not a lite — %s: %s" % (name, why))
+    if len(bad) > 15:
+        print("  ... and %d more" % (len(bad) - 15))
+    if ok and not bad:
+        print("  All good. Next: Tag + color check.")
+    elif ok:
+        print("  You can Tag now; the objects above will be skipped.")
+    return ok
+
+
+def probe_manifest(manifest):
+    """Create one throwaway material from the manifest to prove the .mdl
+    actually resolves from disk, BEFORE anything is bound. The unresolved
+    case prints the placement fix (see create_iray_mdl_material)."""
+    if rt is None:
+        print("Run inside 3ds Max.")
+        return False
+    spec = None
+    for entry in manifest.values():
+        specs = list(entry.get("by_position", {}).values()) or [entry]
+        for s in specs:
+            if isinstance(s, dict) and "type_name" in s:
+                spec = s
+                break
+        if spec:
+            break
+    if spec is None:
+        print("g2m: manifest has no usable material spec.")
+        return False
+    mat = create_iray_mdl_material(spec["type_name"], dict(spec.get("params", {})),
+                                   name="g2m_probe")
+    if mat is not None:
+        print("g2m: module resolves — ready to Bind.")
+        return True
+    return False
 
 
 # --- GUI -------------------------------------------------------------------
@@ -1105,18 +1156,21 @@ def show_gui():
         root.addWidget(box)
         return lay
 
-    # 1 - Find
-    lay1 = group("1 · Find the glazing",
-                 "Scans every object, whatever its class, and selects what "
-                 "looks like a lite. Or just select your glazing yourself and "
-                 "go straight to step 2.")
+    # 1 - Select
+    lay1 = group("1 · Select the glazing",
+                 "In the viewport, select the glazing solids you want to "
+                 "convert — each lite as its own object — then check them "
+                 "here. Nothing is modified by the check.")
     row1 = QtWidgets.QHBoxLayout()
-    btn_scan = QtWidgets.QPushButton("Scan scene")
+    btn_check = QtWidgets.QPushButton("Check my selection")
+    btn_scan = QtWidgets.QPushButton("Find candidates for me")
     btn_test = QtWidgets.QPushButton("Build test scene")
+    row1.addWidget(btn_check)
     row1.addWidget(btn_scan)
     row1.addWidget(btn_test)
     row1.addStretch(1)
     lay1.addLayout(row1)
+    btn_check.clicked.connect(lambda: run(check_selection, redraw=False))
     btn_scan.clicked.connect(lambda: run(find_glazing))
     btn_test.clicked.connect(lambda: run(build_test_scene))
 
@@ -1149,10 +1203,11 @@ def show_gui():
 
     # 3 - Bind
     lay3 = group("3 · Bind the real materials",
-                 "Point at the bind_manifest.json from the downloaded ZIP. "
-                 "With one glazing type, Bind stamps and assigns everything "
-                 "tagged; with several, stamp each selection with its type "
-                 "first.")
+                 "Point at the bind_manifest.json inside the downloaded, "
+                 "unzipped export folder. The export folder must sit DIRECTLY "
+                 "under a folder listed in Iray+ settings > MDL search paths — "
+                 "choosing the manifest checks this for you before anything "
+                 "is bound.")
     row3a = QtWidgets.QHBoxLayout()
     btn_manifest = QtWidgets.QPushButton("Choose bind_manifest.json...")
     lbl_manifest = QtWidgets.QLabel("no manifest loaded")
@@ -1160,11 +1215,20 @@ def show_gui():
     row3a.addWidget(btn_manifest)
     row3a.addWidget(lbl_manifest, 1)
     lay3.addLayout(row3a)
+    lbl_multi = QtWidgets.QLabel(
+        "This manifest carries several glazing types: select each type's "
+        "lites in the viewport and mark them, then Bind.")
+    lbl_multi.setWordWrap(True)
+    lbl_multi.setStyleSheet("color: gray;")
+    lbl_multi.hide()
+    lay3.addWidget(lbl_multi)
     row3b = QtWidgets.QHBoxLayout()
     combo_type = QtWidgets.QComboBox()
     combo_type.setMinimumWidth(180)
-    btn_stamp = QtWidgets.QPushButton("Stamp type on selection")
+    btn_stamp = QtWidgets.QPushButton("Mark selection as this type")
     btn_bind = QtWidgets.QPushButton("Bind materials")
+    combo_type.hide()
+    btn_stamp.hide()
     row3b.addWidget(combo_type)
     row3b.addWidget(btn_stamp)
     row3b.addWidget(btn_bind)
@@ -1177,13 +1241,25 @@ def show_gui():
         if not path:
             return
         def load():
+            import os
             state["manifest"] = load_manifest(path)
             keys = sorted(state["manifest"].keys())
             combo_type.clear()
             combo_type.addItems(keys)
+            multi = len(keys) > 1
+            combo_type.setVisible(multi)
+            btn_stamp.setVisible(multi)
+            lbl_multi.setVisible(multi)
             lbl_manifest.setText(path)
+            export_dir = os.path.dirname(os.path.abspath(path))
             print("g2m: manifest loaded; %d glazing type(s): %s"
                   % (len(keys), ", ".join(keys)))
+            if not multi:
+                print("  One type only — Bind applies it to everything tagged.")
+            print("  Export folder: %s" % export_dir)
+            print("  Its parent must be an Iray+ MDL search path: %s"
+                  % os.path.dirname(export_dir))
+            probe_manifest(state["manifest"])
         run(load, redraw=False)
     btn_manifest.clicked.connect(choose_manifest)
 
@@ -1225,8 +1301,8 @@ def show_gui():
     dlg.show()
     _GUI = dlg
     log.appendPlainText(
-        "Workflow: Scan (or select your glazing) > Tag + color check > flip "
-        "anything blue-out > choose the manifest > Bind.\n"
+        "Workflow: select your glazing in the viewport > Check > Tag + color "
+        "check > flip anything blue-out > choose the manifest > Bind.\n"
         "No Material ID setup is needed beforehand; tagging does it.")
     print("g2m: window open. If you closed it, run this script again.")
 
