@@ -3,12 +3,13 @@ import { toIdentifier } from "../mdl/naming";
 import { TOOL_NAME } from "../mdl/target";
 import { solveSystem } from "../solve/solveSystem";
 import type { ExportMode, GlazingSystemInput } from "../types/system";
+import { APPLY_SCRIPT } from "./applyScript.generated";
 import { buildBindManifest } from "./manifest";
 import { buildReadme } from "./readme";
 
 export interface ExportFile {
   fileName: string;
-  kind: "mdl" | "readme" | "texture" | "manifest";
+  kind: "mdl" | "readme" | "texture" | "manifest" | "script";
   bytes: Uint8Array;
 }
 
@@ -45,8 +46,9 @@ export function buildExport(input: GlazingSystemInput, mode: ExportMode): Export
   const files: ExportFile[] = [
     { fileName: solved.module.fileName, kind: "mdl", bytes: strToU8(solved.module.source) },
     { fileName: "README.txt", kind: "readme", bytes: strToU8(readme) },
-    // Volumetric exports carry the bind manifest that lets the Max apply
-    // script create and assign the materials without manual steps.
+    // Volumetric exports carry the Max apply script and the bind manifest
+    // that drives it, so the ZIP is the complete workflow: unzip under an
+    // MDL search path, Run Script, follow the window.
     ...(mode === "volumetric"
       ? [
           {
@@ -58,6 +60,11 @@ export function buildExport(input: GlazingSystemInput, mode: ExportMode): Export
                 module: solved.module.fileName.replace(/\.mdl$/, ""),
               }),
             ),
+          } satisfies ExportFile,
+          {
+            fileName: "glass2mdl_apply.py",
+            kind: "script",
+            bytes: strToU8(APPLY_SCRIPT),
           } satisfies ExportFile,
         ]
       : []),

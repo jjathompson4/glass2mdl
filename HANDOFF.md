@@ -132,12 +132,14 @@ so frit stays UV-based and coverage % is the spec.
    MDL module binds pink (now refused with a placement message + probe on
    manifest load); and three GUI rounds (window on run, selection-first,
    type controls hidden for single-type manifests).
-   Remaining: mirror rig for **absolute** Rf/Rb; check whether `anno::`
-   annotations display; push the current Iray-Mapper to GitHub; and a
-   **measured** lux comparison of a glass2mdl coated-volumetric export
-   against the 442.7 lux reference — the render looks right; the emitter's
-   exact-interreflection fit still deserves its own measurement. Evidence
-   lives in the byo_mdl repo under `results/evidence/transmission/2026-08-25_*`.
+   **VLT measurement confirmed accurate on the workstation (Jeff, 2026-08-26)**
+   — the quantitative loop is closed. The apply script now **ships inside
+   every volumetric export ZIP** (embedded via `pnpm embed:max` into
+   `applyScript.generated.ts`; a test fails on drift), so the ZIP is the
+   complete workflow. Remaining: mirror rig for **absolute** Rf/Rb; check
+   whether `anno::` annotations display; push the current Iray-Mapper to
+   GitHub. Evidence lives in the byo_mdl repo under
+   `results/evidence/transmission/2026-08-25_*`.
 
 ---
 

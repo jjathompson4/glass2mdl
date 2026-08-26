@@ -39,7 +39,10 @@ export function buildReadme(options: {
     "-----",
     `  ${moduleFileName}`,
     ...(mode === "volumetric"
-      ? ["  bind_manifest.json  (drives the glass2mdl 3ds Max apply script)"]
+      ? [
+          "  glass2mdl_apply.py  (the 3ds Max apply script; run it there)",
+          "  bind_manifest.json  (drives the apply script)",
+        ]
       : []),
     ...textureFileNames.map((f) => `  ${f}`),
     "  README.txt  (this file)",
@@ -48,10 +51,19 @@ export function buildReadme(options: {
     "----------",
     "1. Keep every file in this folder together: the .mdl references the",
     "   images next to it by relative path.",
-    "2. Put the folder somewhere listed as an MDL search path in Iray for",
-    "   3ds Max. (Iray+ settings > MDL search paths; add the parent folder.)",
+    "2. Put the folder DIRECTLY under a folder listed as an MDL search path",
+    "   in Iray for 3ds Max (Iray+ settings > MDL search paths; this",
+    "   folder's parent on disk is the search path).",
     "3. Restart the material browser if it was already open, then find the",
     "   materials by the names below.",
+    ...(mode === "volumetric"
+      ? [
+          "4. In 3ds Max: Scripting > Run Script > glass2mdl_apply.py (from",
+          "   this folder). A window walks the rest: select your glazing,",
+          "   Tag + color check, flip anything blue-out, choose the bundled",
+          "   bind_manifest.json (placement is verified), Bind.",
+        ]
+      : []),
     "",
     "The .mdl filename ends in a revision code that changes with the",
     "content. 3ds Max caches loaded modules for the whole session, so this",

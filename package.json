@@ -11,7 +11,8 @@
     "test:watch": "vitest",
     "typecheck": "next typegen && tsc --noEmit",
     "typecheck:engine": "tsc -p tsconfig.engine.json",
-    "emit:validation-kit": "tsx scripts/emitValidationKit.ts"
+    "emit:validation-kit": "tsx scripts/emitValidationKit.ts",
+    "embed:max": "node scripts/embed-apply-script.mjs"
   },
   "dependencies": {
     "fflate": "^0.8.3",

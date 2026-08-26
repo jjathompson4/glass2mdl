@@ -58,6 +58,31 @@ describe("export bundle", () => {
   });
 });
 
+describe("bundled Max apply script", () => {
+  it("ships in volumetric exports only, next to its manifest", () => {
+    const volumetric = unpack(buildExport(solarban60, "volumetric").zip);
+    expect(volumetric.text("glass2mdl_apply.py")).toContain("def bind(");
+
+    const planar = unpack(buildExport(solarban60, "planar").zip);
+    expect(planar.paths.some((p) => p.endsWith("glass2mdl_apply.py"))).toBe(false);
+  });
+
+  it("is the real script, not a stale embed", async () => {
+    // The generated module is committed; editing scripts/max/glass2mdl_apply.py
+    // must end with `pnpm embed:max`, and this is what enforces it.
+    const { readFileSync } = await import("node:fs");
+    const source = readFileSync(
+      new URL("../../scripts/max/glass2mdl_apply.py", import.meta.url),
+      "utf8",
+    );
+    const { APPLY_SCRIPT } = await import("@/engine/package/applyScript.generated");
+    expect(
+      APPLY_SCRIPT === source,
+      "src/engine/package/applyScript.generated.ts is stale — run: pnpm embed:max",
+    ).toBe(true);
+  });
+});
+
 describe("bind manifest", () => {
   it("ships in volumetric exports only", () => {
     const volumetric = unpack(buildExport(solarban60, "volumetric").zip);
