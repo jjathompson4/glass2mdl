@@ -12,7 +12,7 @@ import {
   type RGB,
 } from "@/engine";
 import { useAppStore } from "@/lib/store";
-import { NumberInput, SegmentedControl } from "@/components/ui/fields";
+import { ActionButton, NumberInput, SegmentedControl } from "@/components/ui/fields";
 
 /**
  * Colour, swatch-first: the tool shows the three colours it already derived
@@ -87,17 +87,9 @@ export function GlassColorPanel() {
                   <p className="text-[13px] text-foreground">{row.label}</p>
                   <p className="text-[11px] text-muted/80">{sourceLine(row.key, spec)}</p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setEditing(open ? null : row.key)}
-                  className={`shrink-0 rounded-md border px-3 py-1 text-xs font-medium transition ${
-                    open
-                      ? "border-accent bg-accent-soft text-accent"
-                      : "border-border-subtle text-muted hover:border-border-strong hover:text-foreground"
-                  }`}
-                >
+                <ActionButton onClick={() => setEditing(open ? null : row.key)} active={open}>
                   {open ? "Done" : "Adjust…"}
-                </button>
+                </ActionButton>
               </div>
 
               {open ? (

@@ -199,7 +199,7 @@ function NumberStrip({ muted = false }: { muted?: boolean }) {
   );
 }
 
-function VerdictChip({
+export function VerdictChip({
   verdict,
   estimated = false,
 }: {

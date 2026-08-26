@@ -11,7 +11,8 @@ import {
 import { useAppStore } from "@/lib/store";
 import { downloadBytes } from "@/lib/download";
 import { toDisplay, unitLabel } from "@/lib/units";
-import { DisclosureRow, Section } from "@/components/ui/fields";
+import { ActionButton, Section } from "@/components/ui/fields";
+import { VerdictChip } from "./DiagramPanel";
 import { FIT_QUANTITIES, fitVerdict } from "./fitVerdict";
 
 /**
@@ -49,16 +50,27 @@ export function ResultSection({
   return (
     <Section id="card-download" title="Download">
       {derived && verdict ? (
-        <DisclosureRow
-          title="Fit check"
-          description="This app is solving for per-lite material properties based on the data you enter from the glazing data sheet. Any discrepancies will be visible here."
-          summary={assemblyEdited ? verdict.chip : "estimated for this construction"}
-          open={showDetails}
-          onToggle={() => setShowDetails(!showDetails)}
-        >
-          <FitTable derived={derived} assembly={system.assembly} />
-          <FitDetails derived={derived} />
-        </DisclosureRow>
+        <div className="rounded-md border border-border-subtle p-3">
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
+            <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+              <p className="text-[13px] font-medium text-foreground">Fit check</p>
+              <VerdictChip verdict={verdict} estimated={!assemblyEdited} />
+            </div>
+            <ActionButton onClick={() => setShowDetails(!showDetails)} active={showDetails}>
+              {showDetails ? "Done" : "Details…"}
+            </ActionButton>
+          </div>
+          <p className="mt-1 text-xs leading-snug text-muted">
+            This app is solving for per-lite material properties based on the data you enter
+            from the glazing data sheet. Any discrepancies will be visible here.
+          </p>
+          {showDetails ? (
+            <div className="mt-3 border-t border-border-subtle pt-3">
+              <FitTable derived={derived} assembly={system.assembly} />
+              <FitDetails derived={derived} />
+            </div>
+          ) : null}
+        </div>
       ) : null}
 
       {bundle ? (

@@ -157,6 +157,37 @@ export function Select<T extends string>({
   );
 }
 
+/**
+ * The standard card action: a real, visibly-accented button. `active` marks
+ * an open panel (the button then reads "Done"); `danger` is for Remove.
+ */
+export function ActionButton({
+  onClick,
+  active = false,
+  danger = false,
+  children,
+}: {
+  onClick: () => void;
+  active?: boolean;
+  danger?: boolean;
+  children: ReactNode;
+}) {
+  const styles = danger
+    ? "border-danger/40 text-danger hover:bg-danger-soft"
+    : active
+      ? "border-accent bg-accent text-white hover:opacity-90"
+      : "border-accent/60 bg-accent-soft text-accent hover:border-accent";
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`shrink-0 rounded-md border px-3 py-1.5 text-xs font-medium transition ${styles}`}
+    >
+      {children}
+    </button>
+  );
+}
+
 export function SegmentedControl<T extends string | number>({
   value,
   onChange,
@@ -186,7 +217,7 @@ export function SegmentedControl<T extends string | number>({
             onClick={() => onChange(option.value)}
             className={`rounded px-3 py-1 text-xs font-medium transition ${
               selected
-                ? "bg-surface text-foreground shadow-sm"
+                ? "bg-accent text-white shadow-sm"
                 : "text-muted hover:text-foreground"
             }`}
           >
@@ -281,66 +312,6 @@ export function Section({
       </header>
       {children}
     </section>
-  );
-}
-
-/**
- * A collapsible row for the fine-tuning group.
- *
- * The closed state has to carry enough that most people never open it: a
- * leading visual (swatches), a plain-language description, and a summary of
- * the current state on the right.
- */
-export function DisclosureRow({
-  title,
-  description,
-  summary,
-  leading,
-  open,
-  onToggle,
-  children,
-}: {
-  title: string;
-  description?: string;
-  summary?: string;
-  leading?: ReactNode;
-  open: boolean;
-  onToggle: () => void;
-  children?: ReactNode;
-}) {
-  return (
-    <div className="rounded-md border border-border-subtle">
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={open}
-        className="flex w-full items-center justify-between gap-3 px-3.5 py-3 text-left"
-      >
-        <div className="flex min-w-0 items-center gap-3">
-          {leading}
-          <div className="min-w-0">
-            <p className="text-[13px] font-medium text-foreground">{title}</p>
-            {description ? <p className="mt-0.5 text-xs leading-snug text-muted">{description}</p> : null}
-          </div>
-        </div>
-        <div className="flex shrink-0 items-center gap-2.5">
-          {summary ? <span className="text-xs text-muted/80">{summary}</span> : null}
-          <svg
-            viewBox="0 0 14 14"
-            className={`h-3.5 w-3.5 text-muted transition-transform ${open ? "rotate-90" : ""}`}
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={1.5}
-            aria-hidden
-          >
-            <path d="M5 3.5 L9 7 L5 10.5" />
-          </svg>
-        </div>
-      </button>
-      {open && children ? (
-        <div className="border-t border-border-subtle px-3.5 py-3">{children}</div>
-      ) : null}
-    </div>
   );
 }
 

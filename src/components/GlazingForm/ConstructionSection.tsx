@@ -10,7 +10,7 @@ import {
 } from "@/engine";
 import { SUBSTRATE_ORDER, useAppStore } from "@/lib/store";
 import { fromDisplay, toDisplay, unitLabel, unitStep } from "@/lib/units";
-import { Field, NumberInput, SegmentedControl, Select, Section } from "@/components/ui/fields";
+import { ActionButton, Field, NumberInput, SegmentedControl, Select, Section } from "@/components/ui/fields";
 import { GlassColorPanel, Swatch } from "./GlassColorPanel";
 
 export function ConstructionSection() {
@@ -128,13 +128,9 @@ export function ConstructionSection() {
             {adjustedCount ? (
               <span className="text-[11px] text-muted/80">{adjustedCount} adjusted</span>
             ) : null}
-            <button
-              type="button"
-              onClick={() => setColorOpen(!colorOpen)}
-              className="text-xs font-medium text-accent transition hover:opacity-80"
-            >
+            <ActionButton onClick={() => setColorOpen(!colorOpen)} active={colorOpen}>
               {colorOpen ? "Done" : "Adjust…"}
-            </button>
+            </ActionButton>
           </div>
         </div>
 

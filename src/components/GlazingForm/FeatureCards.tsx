@@ -9,7 +9,7 @@ import {
 } from "@/engine";
 import { defaultFrit, useAppStore } from "@/lib/store";
 import { surfaceOptions } from "@/lib/surfaces";
-import { Field, Select } from "@/components/ui/fields";
+import { ActionButton, Field, Select } from "@/components/ui/fields";
 import { CoatingOverridesPanel } from "./CoatingPanel";
 import { FritControls } from "./FritSection";
 
@@ -104,13 +104,9 @@ export function CoatingCard({ derived }: { derived: DerivedOptics | null }) {
           {overrideCount ? (
             <span className="text-[11px] text-muted/80">{overrideCount} overridden</span>
           ) : null}
-          <button
-            type="button"
-            onClick={() => setOverridesOpen(!overridesOpen)}
-            className="text-xs font-medium text-accent transition hover:opacity-80"
-          >
+          <ActionButton onClick={() => setOverridesOpen(!overridesOpen)} active={overridesOpen}>
             {overridesOpen ? "Done" : "Override…"}
-          </button>
+          </ActionButton>
         </div>
       </div>
 
@@ -176,13 +172,9 @@ function FeatureCardShell({
           </h2>
           <span className="text-[11px] text-muted/80">shown on the diagram</span>
         </div>
-        <button
-          type="button"
-          onClick={onRemove}
-          className="text-xs font-medium text-danger transition hover:opacity-80"
-        >
+        <ActionButton onClick={onRemove} danger>
           Remove
-        </button>
+        </ActionButton>
       </header>
       {children}
     </section>
