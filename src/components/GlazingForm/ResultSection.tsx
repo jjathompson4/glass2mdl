@@ -50,7 +50,7 @@ export function ResultSection({
       {derived && verdict ? (
         <DisclosureRow
           title="Fit check"
-          description="Your numbers describe the finished assembly, so the tool solves for per-lite material properties that reproduce them when rendered. This is the proof: entered next to produced, and how the values split across the lites."
+          description="This app is solving for per-lite material properties based on the data you enter from the glazing datasheet. Any discrepancies will be visible here."
           summary={verdict.chip}
           open={showDetails}
           onToggle={() => setShowDetails(!showDetails)}

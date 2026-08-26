@@ -131,6 +131,13 @@ export function ConstructionSection() {
           </div>
         </div>
 
+        <p className="mt-1.5 text-[11px] leading-snug text-muted/80">
+          VLT, Rext, Rint from the datasheet set the brightness; the substrate selection menu
+          supplies a reasonable, representative hue. If the glazing datasheet provides any
+          color data, tap Adjust and enter that information for improved accuracy. Measured
+          product colors from the LBNL International Glazing Database are coming soon.
+        </p>
+
         {colorOpen ? (
           <div className="mt-3">
             <GlassColorPanel />
