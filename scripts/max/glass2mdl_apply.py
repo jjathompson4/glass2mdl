@@ -51,6 +51,17 @@ try:
 except ImportError:  # keeps the file importable/compilable outside Max
     rt = None
 
+# Scripting > Run Script executes this file in Max's shared __main__
+# namespace, where other tooling is free to have bound plain names over the
+# builtins -- on real installs `max` arrives as a MODULE, which silently
+# shadows the builtin for every function defined here ("'module' object is
+# not callable"). Everything below calls these explicit aliases instead, so
+# no ambient name can break the geometry code.
+import builtins as _builtins
+
+_min = _builtins.min
+_max = _builtins.max
+
 ID_EXTERIOR = 1
 ID_INTERIOR = 2
 ID_EDGE = 3
@@ -150,7 +161,7 @@ def _world_faces(obj):
     else:
         return None, None
 
-    sample = [v for loop in raw[: min(len(raw), 8)] for v in loop]
+    sample = [v for loop in raw[: _min(len(raw), 8)] for v in loop]
     tm = _vert_transform(obj, sample)
     for loop in raw:
         if tm is not None:
@@ -283,7 +294,7 @@ def _analyze_loops(loops, plane_tol, max_thickness):
         for p in loops[fi - 1]:
             us.append(_dot(p, u))
             vs.append(_dot(p, v))
-    extent_min = min(max(us) - min(us), max(vs) - min(vs))
+    extent_min = _min(_max(us) - _min(us), _max(vs) - _min(vs))
     return {
         "extent_min": extent_min,
         "axis": a["n"],
@@ -325,8 +336,8 @@ def _group_igus(records, axial_gap, lateral_factor):
                 continue
             delta = _v_sub(rec["center"], ref["center"])
             axial = abs(_dot(delta, ref["axis"]))
-            lateral = math.sqrt(max(_dot(delta, delta) - axial * axial, 0.0))
-            radius = math.sqrt(max(rec["face_area"], ref["face_area"]))
+            lateral = math.sqrt(_max(_dot(delta, delta) - axial * axial, 0.0))
+            radius = math.sqrt(_max(rec["face_area"], ref["face_area"]))
             if axial < axial_gap and lateral < lateral_factor * radius:
                 g.append(rec)
                 placed = True
@@ -354,7 +365,7 @@ def _pick_exterior(groups):
         if abs(d) > 0.3:
             confident += 1
         axes.append(axis)
-    if confident < max(1, len(groups) // 2):
+    if confident < _max(1, len(groups) // 2):
         # Flat facade: centroid sits in the glazing plane, every dot ~ 0.
         # Fall back to one consistent side and let qa() + flip_all() decide.
         base = axes[0]
