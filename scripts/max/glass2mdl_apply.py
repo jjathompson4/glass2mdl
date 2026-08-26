@@ -10,8 +10,9 @@ Face ID convention (extends validation-kit test 03):
     ID 3 = edge faces
 
 Scripting > Run Script on this file OPENS A WINDOW that walks the pipeline:
-Scan > Tag + color check > flip anything backwards > choose the exported
-bind_manifest.json > Bind. That is the normal path; no listener needed.
+select the glazing > Tag + color check > flip anything backwards > choose the
+exported bind_manifest.json > Assign materials. That is the normal path; no
+listener needed.
 
 The same pipeline is scriptable from the listener:
 
@@ -744,7 +745,7 @@ def create_iray_mdl_material(type_name, params=None, enable_emission=False, name
             print("     Fix: the exported folder '%s' must sit DIRECTLY" % folder)
             print("     under a folder listed in Iray+ settings > MDL search")
             print("     paths (the folder's parent on disk IS the search path).")
-            print("     Move it there, then Bind again.")
+            print("     Move it there, then assign again.")
             return None
     return mat
 
@@ -1074,7 +1075,7 @@ def probe_manifest(manifest):
     mat = create_iray_mdl_material(spec["type_name"], dict(spec.get("params", {})),
                                    name="g2m_probe")
     if mat is not None:
-        print("g2m: module resolves — ready to Bind.")
+        print("g2m: module resolves — ready to assign.")
         return True
     return False
 
@@ -1205,12 +1206,12 @@ def show_gui():
     btn_flip_all.clicked.connect(lambda: run(flip_all))
 
     # 3 - Bind
-    lay3 = group("3 · Bind the real materials",
+    lay3 = group("3 · Assign the real materials",
                  "Point at the bind_manifest.json inside the downloaded, "
                  "unzipped export folder. The export folder must sit DIRECTLY "
                  "under a folder listed in Iray+ settings > MDL search paths — "
-                 "choosing the manifest checks this for you before anything "
-                 "is bound.")
+                 "choosing the manifest checks this for you before any material "
+                 "is assigned.")
     row3a = QtWidgets.QHBoxLayout()
     btn_manifest = QtWidgets.QPushButton("Choose bind_manifest.json...")
     lbl_manifest = QtWidgets.QLabel("no manifest loaded")
@@ -1220,7 +1221,7 @@ def show_gui():
     lay3.addLayout(row3a)
     lbl_multi = QtWidgets.QLabel(
         "This manifest carries several glazing types: select each type's "
-        "lites in the viewport and mark them, then Bind.")
+        "lites in the viewport and mark them, then Assign materials.")
     lbl_multi.setWordWrap(True)
     lbl_multi.setStyleSheet("color: gray;")
     lbl_multi.hide()
@@ -1229,7 +1230,7 @@ def show_gui():
     combo_type = QtWidgets.QComboBox()
     combo_type.setMinimumWidth(180)
     btn_stamp = QtWidgets.QPushButton("Mark selection as this type")
-    btn_bind = QtWidgets.QPushButton("Bind materials")
+    btn_bind = QtWidgets.QPushButton("Assign materials")
     combo_type.hide()
     btn_stamp.hide()
     row3b.addWidget(combo_type)
@@ -1258,7 +1259,7 @@ def show_gui():
             print("g2m: manifest loaded; %d glazing type(s): %s"
                   % (len(keys), ", ".join(keys)))
             if not multi:
-                print("  One type only — Bind applies it to everything tagged.")
+                print("  One type only — Assign materials applies it to everything tagged.")
             print("  Export folder: %s" % export_dir)
             print("  Its parent must be an Iray+ MDL search path: %s"
                   % os.path.dirname(export_dir))
@@ -1281,7 +1282,7 @@ def show_gui():
             return str(cur) if cur not in (None, "", "undefined") else None
 
         if len(keys) == 1:
-            # One type in the manifest: Bind means "apply THIS product to
+            # One type in the manifest: Assign means "apply THIS product to
             # everything tagged". Type stamps from an earlier product are
             # stale state, not intent — overwrite them, and say so.
             only = next(iter(keys))
@@ -1332,7 +1333,8 @@ def show_gui():
     _GUI = dlg
     log.appendPlainText(
         "Workflow: select your glazing in the viewport > Check > Tag + color "
-        "check > flip anything blue-out > choose the manifest > Bind.\n"
+        "check > flip anything blue-out > choose the manifest > Assign "
+        "materials.\n"
         "No Material ID setup is needed beforehand; tagging does it.")
     print("g2m: window open. If you closed it, run this script again.")
 
