@@ -74,9 +74,16 @@ mode is the path; the drag fallback is not needed. Recipe + manifest format in
 
 ## The pipeline
 
-Run `glass2mdl_apply.py` once (Scripting > Run Script), then drive it from
-the listener. Face ID convention throughout — **ID 1 exterior, ID 2 interior,
-ID 3 edges** (extends validation-kit test 03).
+**Scripting > Run Script on `glass2mdl_apply.py` opens the GUI** — the whole
+pipeline as buttons in workflow order with a live log: Scan (class-agnostic;
+rejections reported by reason, never silent) → Tag + color check → Flip →
+choose `bind_manifest.json` → Bind (with a single-type manifest, Bind stamps
+every tagged lite automatically). Detection probes any geometry class via a
+world-space snapshot; tagging collapses to Editable Poly when needed
+(undoable, on by default). Face ID convention throughout — **ID 1 exterior,
+ID 2 interior, ID 3 edges** (extends validation-kit test 03).
+
+The listener API remains for scripted use:
 
 ### 1. Identify
 

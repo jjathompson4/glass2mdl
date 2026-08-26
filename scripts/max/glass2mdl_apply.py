@@ -9,7 +9,11 @@ Face ID convention (extends validation-kit test 03):
     ID 2 = interior large face
     ID 3 = edge faces
 
-Usage from the 3ds Max listener (after Scripting > Run Script):
+Scripting > Run Script on this file OPENS A WINDOW that walks the pipeline:
+Scan > Tag + color check > flip anything backwards > choose the exported
+bind_manifest.json > Bind. That is the normal path; no listener needed.
+
+The same pipeline is scriptable from the listener:
 
     import glass2mdl_apply as ga
     ga.build_test_scene()        # optional: synthetic boxes to try it on
@@ -197,10 +201,63 @@ def _cluster_faces(loops, plane_tol):
     return clusters
 
 
+def _snapshot_loops(obj, max_faces):
+    """World-space triangle loops for ANY renderable node, via snapshotAsMesh.
+
+    Detection only: triangle indices are NOT aligned with the node's own
+    faces, so tagging still needs the node collapsed to Editable Poly/Mesh.
+    This is what lets find_glazing() see Body Objects, modifier stacks, and
+    every other import class without touching the scene.
+    """
+    try:
+        m = rt.snapshotAsMesh(obj)
+    except Exception:  # noqa: BLE001
+        return None, "not snapshottable (non-renderable object)"
+    try:
+        nf = int(m.numfaces)
+        if nf == 0:
+            return None, "no faces"
+        if nf > max_faces:
+            return None, "denser than %d faces" % max_faces
+        loops = []
+        for f in range(1, nf + 1):
+            face = rt.getFace(m, f)
+            loops.append([(p.x, p.y, p.z) for p in
+                          (rt.getVert(m, int(i)) for i in (face.x, face.y, face.z))])
+    finally:
+        try:
+            rt.free(m)
+        except Exception:  # noqa: BLE001
+            pass
+    return loops, None
+
+
+def _probe_lite(obj, plane_tol, max_thickness, max_faces):
+    """Class-agnostic lite test for detection (see _snapshot_loops)."""
+    loops, why = _snapshot_loops(obj, max_faces)
+    if loops is None:
+        return None, why
+    rec, why = _analyze_loops(loops, plane_tol, max_thickness)
+    if rec is None:
+        return None, why
+    rec["obj"] = obj
+    return rec, None
+
+
 def _analyze_lite(obj, plane_tol, max_thickness):
+    """Face-index-aligned analysis for tagging: Editable Poly/Mesh only."""
     kind, loops = _world_faces(obj)
     if loops is None:
-        return None, "unsupported class %s (convert=True to collapse)" % rt.classOf(obj)
+        return None, "unsupported class %s (needs collapsing to Editable Poly)" % rt.classOf(obj)
+    rec, why = _analyze_loops(loops, plane_tol, max_thickness)
+    if rec is None:
+        return None, why
+    rec["obj"] = obj
+    rec["kind"] = kind
+    return rec, None
+
+
+def _analyze_loops(loops, plane_tol, max_thickness):
     clusters = _cluster_faces(loops, plane_tol)
     if len(clusters) < 3:
         return None, "fewer than 3 planar face groups — not a solid lite"
@@ -229,7 +286,7 @@ def _analyze_lite(obj, plane_tol, max_thickness):
     extent_min = min(max(us) - min(us), max(vs) - min(vs))
     return {
         "extent_min": extent_min,
-        "obj": obj, "kind": kind, "axis": a["n"],
+        "axis": a["n"],
         "center": ((a["center"][0] + b["center"][0]) / 2,
                    (a["center"][1] + b["center"][1]) / 2,
                    (a["center"][2] + b["center"][2]) / 2),
@@ -367,28 +424,32 @@ def find_glazing(max_faces=2000, min_pane_mm=200.0, plane_tol_mm=1.0,
     max_thickness = _mm(max_thickness_mm)
     min_pane = _mm(min_pane_mm)
 
-    candidates = []
-    for obj in rt.objects:
-        cls = rt.classOf(obj)
-        if cls not in (rt.Editable_Poly, rt.Editable_mesh):
-            continue
-        try:
-            nf = (int(rt.polyop.getNumFaces(obj)) if cls == rt.Editable_Poly
-                  else int(obj.mesh.numfaces))
-        except Exception:  # noqa: BLE001
-            continue
-        if nf == 0 or nf > max_faces:
-            continue
-        rec, _why = _analyze_lite(obj, plane_tol, max_thickness)
-        if rec is None or rec["extent_min"] < min_pane:
-            continue
+    def hinted(obj):
         name = str(obj.name).lower()
         layer = ""
         try:
             layer = str(obj.layer.name).lower()
         except Exception:  # noqa: BLE001
             pass
-        rec["hinted"] = any(h in name or h in layer for h in GLAZING_NAME_HINTS)
+        return any(h in name or h in layer for h in GLAZING_NAME_HINTS)
+
+    # Every geometry node is probed via a world-space snapshot, whatever its
+    # class — imports (Body Objects, linked geometry, live modifier stacks)
+    # qualify without being touched. Nothing is skipped silently: rejections
+    # are counted by reason, and rejects that LOOK like glazing by name are
+    # called out individually, because those are the ones worth questioning.
+    candidates, reasons, hinted_rejects, scanned = [], {}, [], 0
+    for obj in rt.geometry:
+        scanned += 1
+        rec, why = _probe_lite(obj, plane_tol, max_thickness, max_faces)
+        if rec is not None and rec["extent_min"] < min_pane:
+            rec, why = None, "narrower than %.0fmm in-plane (frame profile?)" % min_pane_mm
+        if rec is None:
+            reasons[why] = reasons.get(why, 0) + 1
+            if hinted(obj):
+                hinted_rejects.append((str(obj.name), why))
+            continue
+        rec["hinted"] = hinted(obj)
         candidates.append(rec)
 
     groups = _group_igus(candidates, _mm(axial_gap_mm), lateral_factor)
@@ -402,14 +463,27 @@ def find_glazing(max_faces=2000, min_pane_mm=200.0, plane_tol_mm=1.0,
     objs = [r["obj"] for r in candidates]
     if select and objs:
         rt.select(objs)
-    print("g2m: %d glazing candidates in %d IGU groups (%d multi-lite)%s."
-          % (len(objs), len(groups), multi,
+    print("g2m: %d glazing candidates in %d IGU groups (%d multi-lite), of %d objects scanned%s."
+          % (len(objs), len(groups), multi, scanned,
              "; selected for review" if select and objs else ""))
     if low:
-        shown = ", ".join(low[:12]) + (" …" if len(low) > 12 else "")
+        shown = ", ".join(low[:12]) + (" ..." if len(low) > 12 else "")
         print("  low confidence (geometry only, single lite): %s" % shown)
+    if hinted_rejects:
+        print("  NAMED like glazing but rejected:")
+        for name, why in hinted_rejects[:8]:
+            print("    %s: %s" % (name, why))
+        if len(hinted_rejects) > 8:
+            print("    ... and %d more" % (len(hinted_rejects) - 8))
+    if not objs and reasons:
+        top = sorted(reasons.items(), key=lambda kv: kv[1], reverse=True)
+        print("  Nothing qualified. Rejections by reason:")
+        for why, n in top[:5]:
+            print("    %4d x %s" % (n, why))
+        print("  If your glazing is single planes (no thickness), the solid-lite"
+              " pipeline cannot tag it; use the Planar geometry export instead.")
     if objs:
-        print("  Review the selection, deselect false positives, then: tag()")
+        print("  Review the selection, deselect false positives, then tag.")
     return objs
 
 
@@ -429,10 +503,15 @@ def assign_type(prefix):
     print("g2m: type '%s' assigned to %d objects." % (prefix, len(sel)))
 
 
-def tag(pattern=None, convert=False, plane_tol_mm=1.0, max_thickness_mm=60.0,
+def tag(pattern=None, convert=True, plane_tol_mm=1.0, max_thickness_mm=60.0,
         axial_gap_mm=150.0, lateral_factor=0.35):
     """Tag lites in the selection (or matching a name/layer pattern) with the
-    ID 1/2/3 convention, and group them into IGUs stored as user properties."""
+    ID 1/2/3 convention, and group them into IGUs stored as user properties.
+
+    Face IDs live on Editable Poly/Mesh, so anything else in the selection is
+    collapsed first (convert=True, the default; undoable). Pass convert=False
+    to leave import classes and modifier stacks untouched and skip them.
+    """
     if rt is None:
         print("Run inside 3ds Max.")
         return
@@ -445,12 +524,13 @@ def tag(pattern=None, convert=False, plane_tol_mm=1.0, max_thickness_mm=60.0,
     max_thickness = _mm(max_thickness_mm)
     axial_gap = _mm(axial_gap_mm)
 
-    records, skipped = [], []
+    records, skipped, converted = [], [], 0
     with _UndoBlock():
         for obj in objs:
             if convert and rt.classOf(obj) not in (rt.Editable_Poly, rt.Editable_mesh):
                 try:
                     rt.convertToPoly(obj)
+                    converted += 1
                 except Exception:  # noqa: BLE001
                     pass
             rec, why = _analyze_lite(obj, plane_tol, max_thickness)
@@ -478,8 +558,9 @@ def tag(pattern=None, convert=False, plane_tol_mm=1.0, max_thickness_mm=60.0,
                 rt.setUserProp(obj, PROP_IGU, str(igu_idx))
                 rt.setUserProp(obj, PROP_POSITION, position)
 
-    print("g2m: tagged %d lites in %d IGUs; skipped %d."
-          % (len(records), len(groups), len(skipped)))
+    print("g2m: tagged %d lites in %d IGUs; skipped %d%s."
+          % (len(records), len(groups), len(skipped),
+             "; collapsed %d to Editable Poly (undoable)" % converted if converted else ""))
     for name, why in skipped:
         print("  skipped %s: %s" % (name, why))
 
@@ -893,3 +974,233 @@ def build_test_scene():
     rt.select(made)
     print("g2m: built %d test lites (IGU 3 is rotated 90 degrees). Now: tag()"
           % len(made))
+
+
+def report():
+    """What is tagged, grouped how, typed as what."""
+    if rt is None:
+        print("Run inside 3ds Max.")
+        return
+    tagged = _tagged_objects()
+    igus = {}
+    for obj in tagged:
+        key = str(rt.getUserProp(obj, PROP_IGU))
+        igus.setdefault(key, []).append(obj)
+    types = {}
+    for obj in tagged:
+        t = rt.getUserProp(obj, PROP_TYPE)
+        types[str(t) if t is not None else "(untyped)"] = \
+            types.get(str(t) if t is not None else "(untyped)", 0) + 1
+    print("g2m: %d tagged lites in %d IGUs." % (len(tagged), len(igus)))
+    for t, n in sorted(types.items()):
+        print("  %s: %d lites" % (t, n))
+
+
+# --- GUI -------------------------------------------------------------------
+# Running this file from Scripting > Run Script opens this window: the whole
+# pipeline as buttons in workflow order, with every report echoed into the
+# window's log (and still printed to the listener).
+
+_GUI = None  # keeps the dialog alive; Max's Python GC closes unparented Qt
+
+
+def show_gui():
+    global _GUI
+    if rt is None:
+        print("Run inside 3ds Max.")
+        return
+    try:
+        from PySide2 import QtWidgets, QtGui  # Max 2021-2024
+    except ImportError:
+        try:
+            from PySide6 import QtWidgets, QtGui  # Max 2025+
+        except ImportError:
+            print("g2m: PySide not available; drive the listener API instead "
+                  "(find_glazing / tag / qa / bind).")
+            return
+
+    parent = None
+    try:
+        import qtmax
+        parent = qtmax.GetQMaxMainWindow()
+    except Exception:  # noqa: BLE001
+        pass
+
+    if _GUI is not None:
+        try:
+            _GUI.close()
+        except Exception:  # noqa: BLE001
+            pass
+
+    dlg = QtWidgets.QDialog(parent)
+    dlg.setWindowTitle("glass2mdl - apply to modeled IGUs")
+    dlg.setMinimumWidth(480)
+    root = QtWidgets.QVBoxLayout(dlg)
+
+    log = QtWidgets.QPlainTextEdit()
+    log.setReadOnly(True)
+    log.setMinimumHeight(170)
+    log.setFont(QtGui.QFont("Consolas", 9))
+
+    state = {"manifest": None}
+
+    def run(fn, redraw=True):
+        """Run one step; everything it prints lands in the log AND listener."""
+        import contextlib
+        import io
+        import traceback
+        buf = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(buf):
+                fn()
+        except Exception:  # noqa: BLE001
+            buf.write(traceback.format_exc())
+        text = buf.getvalue().rstrip()
+        if text:
+            log.appendPlainText(text)
+            print(text)
+        if redraw:
+            try:
+                rt.redrawViews()
+            except Exception:  # noqa: BLE001
+                pass
+
+    def group(title, tip=None):
+        box = QtWidgets.QGroupBox(title)
+        lay = QtWidgets.QVBoxLayout(box)
+        if tip:
+            lbl = QtWidgets.QLabel(tip)
+            lbl.setWordWrap(True)
+            lbl.setStyleSheet("color: gray;")
+            lay.addWidget(lbl)
+        root.addWidget(box)
+        return lay
+
+    # 1 - Find
+    lay1 = group("1 · Find the glazing",
+                 "Scans every object, whatever its class, and selects what "
+                 "looks like a lite. Or just select your glazing yourself and "
+                 "go straight to step 2.")
+    row1 = QtWidgets.QHBoxLayout()
+    btn_scan = QtWidgets.QPushButton("Scan scene")
+    btn_test = QtWidgets.QPushButton("Build test scene")
+    row1.addWidget(btn_scan)
+    row1.addWidget(btn_test)
+    row1.addStretch(1)
+    lay1.addLayout(row1)
+    btn_scan.clicked.connect(lambda: run(find_glazing))
+    btn_test.clicked.connect(lambda: run(build_test_scene))
+
+    # 2 - Tag + check
+    lay2 = group("2 · Tag faces + color check",
+                 "Assigns face IDs on the selection (1 exterior / 2 interior / "
+                 "3 edges) and paints the check colors. Orbit the model: "
+                 "exterior glass must read RED. Blue outside? Select it and "
+                 "flip.")
+    chk_convert = QtWidgets.QCheckBox(
+        "Collapse to Editable Poly when needed (undoable; required for face IDs)")
+    chk_convert.setChecked(True)
+    lay2.addWidget(chk_convert)
+    row2 = QtWidgets.QHBoxLayout()
+    btn_tag = QtWidgets.QPushButton("Tag + color check")
+    btn_flip = QtWidgets.QPushButton("Flip selected")
+    btn_flip_all = QtWidgets.QPushButton("Flip all")
+    row2.addWidget(btn_tag)
+    row2.addWidget(btn_flip)
+    row2.addWidget(btn_flip_all)
+    row2.addStretch(1)
+    lay2.addLayout(row2)
+
+    def do_tag():
+        tag(convert=chk_convert.isChecked())
+        qa()
+    btn_tag.clicked.connect(lambda: run(do_tag))
+    btn_flip.clicked.connect(lambda: run(flip_selected))
+    btn_flip_all.clicked.connect(lambda: run(flip_all))
+
+    # 3 - Bind
+    lay3 = group("3 · Bind the real materials",
+                 "Point at the bind_manifest.json from the downloaded ZIP. "
+                 "With one glazing type, Bind stamps and assigns everything "
+                 "tagged; with several, stamp each selection with its type "
+                 "first.")
+    row3a = QtWidgets.QHBoxLayout()
+    btn_manifest = QtWidgets.QPushButton("Choose bind_manifest.json...")
+    lbl_manifest = QtWidgets.QLabel("no manifest loaded")
+    lbl_manifest.setStyleSheet("color: gray;")
+    row3a.addWidget(btn_manifest)
+    row3a.addWidget(lbl_manifest, 1)
+    lay3.addLayout(row3a)
+    row3b = QtWidgets.QHBoxLayout()
+    combo_type = QtWidgets.QComboBox()
+    combo_type.setMinimumWidth(180)
+    btn_stamp = QtWidgets.QPushButton("Stamp type on selection")
+    btn_bind = QtWidgets.QPushButton("Bind materials")
+    row3b.addWidget(combo_type)
+    row3b.addWidget(btn_stamp)
+    row3b.addWidget(btn_bind)
+    row3b.addStretch(1)
+    lay3.addLayout(row3b)
+
+    def choose_manifest():
+        path, _filter = QtWidgets.QFileDialog.getOpenFileName(
+            dlg, "Choose bind_manifest.json", "", "bind manifest (*.json)")
+        if not path:
+            return
+        def load():
+            state["manifest"] = load_manifest(path)
+            keys = sorted(state["manifest"].keys())
+            combo_type.clear()
+            combo_type.addItems(keys)
+            lbl_manifest.setText(path)
+            print("g2m: manifest loaded; %d glazing type(s): %s"
+                  % (len(keys), ", ".join(keys)))
+        run(load, redraw=False)
+    btn_manifest.clicked.connect(choose_manifest)
+
+    btn_stamp.clicked.connect(
+        lambda: run(lambda: assign_type(combo_type.currentText()), redraw=False))
+
+    def do_bind():
+        manifest = state["manifest"]
+        if not manifest:
+            print("g2m: choose the bind_manifest.json first.")
+            return
+        if len(manifest) == 1:
+            # One type in the manifest: stamping every un-typed tagged lite
+            # with it is the only sensible meaning of "bind".
+            only = next(iter(manifest))
+            stamped = 0
+            for obj in _tagged_objects():
+                if rt.getUserProp(obj, PROP_TYPE) is None:
+                    rt.setUserProp(obj, PROP_TYPE, only)
+                    stamped += 1
+            if stamped:
+                print("g2m: stamped %d untyped lites as '%s'." % (stamped, only))
+        bind(material_factory=make_iray_mdl_factory(manifest))
+    btn_bind.clicked.connect(lambda: run(do_bind))
+
+    # Extras + log
+    row4 = QtWidgets.QHBoxLayout()
+    btn_report = QtWidgets.QPushButton("Report")
+    btn_clear = QtWidgets.QPushButton("Clear tags")
+    row4.addWidget(btn_report)
+    row4.addWidget(btn_clear)
+    row4.addStretch(1)
+    root.addLayout(row4)
+    btn_report.clicked.connect(lambda: run(report, redraw=False))
+    btn_clear.clicked.connect(lambda: run(clear_tags))
+
+    root.addWidget(log)
+
+    dlg.show()
+    _GUI = dlg
+    log.appendPlainText(
+        "Workflow: Scan (or select your glazing) > Tag + color check > flip "
+        "anything blue-out > choose the manifest > Bind.\n"
+        "No Material ID setup is needed beforehand; tagging does it.")
+    print("g2m: window open. If you closed it, run this script again.")
+
+
+if __name__ == "__main__":
+    show_gui()
