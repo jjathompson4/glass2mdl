@@ -12,7 +12,7 @@ export default function About() {
   return (
     <div className="flex min-h-screen flex-col">
       <header className="border-b border-border-subtle bg-surface">
-        <div className="mx-auto flex max-w-6xl items-baseline justify-between gap-4 px-5 py-4">
+        <div className="mx-auto flex max-w-[820px] items-baseline justify-between gap-4 px-5 py-4">
           <Link href="/" className="text-base font-semibold tracking-tight transition hover:opacity-80">
             glass2mdl
           </Link>
@@ -27,14 +27,14 @@ export default function About() {
 
         <div className="mt-5 space-y-5 text-sm leading-relaxed text-foreground">
           <p>
-            glass2mdl turns the numbers on a glazing manufacturer&apos;s datasheet into MDL
+            glass2mdl turns the numbers on a glazing manufacturer&apos;s data sheet into MDL
             materials for Iray in 3ds Max. Glazing materials created with this tool transmit,
-            reflect, and absorb exactly the amount of light that the datasheet describes, and
+            reflect, and absorb exactly the amount of light that the data sheet describes, and
             it looks physically correct from both sides. Coated products keep their asymmetric
             reflections. The fit check shows you the proof before you download.
           </p>
           <p>
-            You build the configuration exactly as the datasheet describes (lites, thicknesses,
+            You build the configuration exactly as the data sheet describes (lites, thicknesses,
             substrates, coating placement, any frit) and type the three visible light values
             from the performance table. The tool solves for per-lite material properties whose
             rendered assembly, including the light bouncing between lites, reproduces those
@@ -57,7 +57,7 @@ export default function About() {
           <p>
             This is visible-light appearance for rendering and point-in-time calculations, not
             thermal or annual daylight analysis. Glass color is a physically sensible estimate
-            from your substrate choice unless the datasheet publishes color data, which you
+            from your substrate choice unless the data sheet publishes color data, which you
             can enter.
           </p>
 

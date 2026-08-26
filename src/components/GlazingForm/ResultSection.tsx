@@ -33,6 +33,7 @@ export function ResultSection({
   const [showDetails, setShowDetails] = useState(false);
   const [error, setError] = useState<string>();
 
+  const assemblyEdited = useAppStore((s) => s.assemblyEdited);
   const verdict = derived ? fitVerdict(derived, system.assembly) : null;
 
   const handleDownload = () => {
@@ -50,8 +51,8 @@ export function ResultSection({
       {derived && verdict ? (
         <DisclosureRow
           title="Fit check"
-          description="This app is solving for per-lite material properties based on the data you enter from the glazing datasheet. Any discrepancies will be visible here."
-          summary={verdict.chip}
+          description="This app is solving for per-lite material properties based on the data you enter from the glazing data sheet. Any discrepancies will be visible here."
+          summary={assemblyEdited ? verdict.chip : "estimated for this construction"}
           open={showDetails}
           onToggle={() => setShowDetails(!showDetails)}
         >
@@ -77,15 +78,15 @@ export function ResultSection({
         disabled={blocked}
         className="mt-3 w-full rounded-md bg-accent px-3 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
       >
-        {blocked ? "Fix the errors above to export" : "Download ZIP"}
+        {blocked ? "Fix the errors above to download" : "Download ZIP"}
       </button>
 
       {error ? <p className="mt-2 text-xs text-danger">{error}</p> : null}
 
       <p className="mt-2 text-[11px] leading-snug text-muted">
-        {mode === "volumetric"
-          ? "Unzip so the export folder sits directly under an Iray MDL search path. In 3ds Max, the bundled manifest lets glass2mdl's Max script tag the faces and assign every material automatically; the README covers the manual route."
-          : "The README says which material goes on which plane, with face normals pointing outward."}
+        The README says which material goes on which plane, with face normals pointing outward.
+        If working with solid lite geometry, use the Python script included in the ZIP file to
+        automate material assignments.
       </p>
       <p className="mt-1.5 border-t border-border-subtle pt-2 text-[11px] leading-snug text-muted/80">
         In-app preview coming soon.

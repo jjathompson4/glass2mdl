@@ -33,7 +33,14 @@ export function ConstructionSection() {
 
   return (
     <Section
-      title="Construction"
+      id="card-construction"
+      title={
+        <>
+          <span className="text-accent">1</span>
+          <span className="text-muted"> · </span>
+          Construction
+        </>
+      }
       description="The build-up from the data sheet header: lites and the gaps between them."
       action={
         <SegmentedControl
@@ -132,10 +139,9 @@ export function ConstructionSection() {
         </div>
 
         <p className="mt-1.5 text-[11px] leading-snug text-muted/80">
-          VLT, Rext, Rint from the datasheet set the brightness; the substrate selection menu
-          supplies a reasonable, representative hue. If the glazing datasheet provides any
-          color data, tap Adjust and enter that information for improved accuracy. Measured
-          product colors from the LBNL International Glazing Database are coming soon.
+          VLT and the two reflectance values set the brightness; the substrate menu supplies
+          a representative hue. If the data sheet lists color data, click Adjust and enter it.
+          Measured colors from the LBNL International Glazing Database are coming soon.
         </p>
 
         {colorOpen ? (

@@ -5,10 +5,9 @@ const linkClass = "text-accent transition hover:opacity-80";
 export function SiteFooter({ showAbout = true }: { showAbout?: boolean }) {
   return (
     <footer className="mt-auto border-t border-border-subtle px-5 py-5">
-      <div className="mx-auto flex max-w-6xl flex-col items-center gap-1.5 text-center text-xs text-muted">
+      <div className="mx-auto flex max-w-[820px] flex-col items-center gap-1.5 text-center text-xs text-muted">
         <p>
-          Outputs intended for simulations in Iray+ 3.1 for 3ds Max 2024. Not intended for use
-          in thermal or annual daylight analysis.
+          For rendering and visualization only, not for thermal or annual daylight analysis.
         </p>
         <p>
           {showAbout ? (

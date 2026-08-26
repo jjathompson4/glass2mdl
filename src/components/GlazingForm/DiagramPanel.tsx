@@ -27,6 +27,8 @@ export function DiagramPanel({ derived }: { derived: DerivedOptics | null }) {
   const system = useAppStore((s) => s.system);
   const moveCoatingToSurface = useAppStore((s) => s.moveCoatingToSurface);
   const setFrit = useAppStore((s) => s.setFrit);
+  const setLiteCount = useAppStore((s) => s.setLiteCount);
+  const assemblyEdited = useAppStore((s) => s.assemblyEdited);
 
   const [condensed, setCondensed] = useState(false);
   const [barTop, setBarTop] = useState(0);
@@ -97,6 +99,11 @@ export function DiagramPanel({ derived }: { derived: DerivedOptics | null }) {
             fritSurface={frit?.surface}
             onFeatureClick={jumpToFeature}
             onAddAt={canAddCoating || canAddFrit ? handleAddAt : undefined}
+            onAddLite={
+              system.lites.length < 3
+                ? () => setLiteCount(system.lites.length + 1)
+                : undefined
+            }
           />
 
               {pendingAdd !== null ? (
@@ -133,8 +140,8 @@ export function DiagramPanel({ derived }: { derived: DerivedOptics | null }) {
               ) : null}
 
           <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-border-subtle pt-2">
-            <NumberStrip />
-            <VerdictChip verdict={verdict} />
+            <NumberStrip muted={!assemblyEdited} />
+            <VerdictChip verdict={verdict} estimated={!assemblyEdited} />
           </div>
         </div>
       </div>
@@ -145,7 +152,7 @@ export function DiagramPanel({ derived }: { derived: DerivedOptics | null }) {
           style={{ top: barTop }}
         >
           <div className="mx-auto max-w-[820px] px-5 py-2">
-            <CondensedBar verdict={verdict} onJump={jumpToFeature} />
+            <CondensedBar verdict={verdict} estimated={!assemblyEdited} onJump={jumpToFeature} />
           </div>
         </div>
       ) : null}
@@ -171,25 +178,37 @@ function constructionSummary(system: {
   return `${spans.join(" / ")} mm · ${tint}`;
 }
 
-function NumberStrip() {
+function NumberStrip({ muted = false }: { muted?: boolean }) {
   const assembly = useAppStore((s) => s.system.assembly);
   const pct = (v: number) => `${(v * 100).toFixed(0)}%`;
+  // Muted until the user types a number of their own: seeded defaults are a
+  // sensible starting estimate, not data anyone entered.
+  const value = muted ? "font-mono text-muted" : "font-mono text-foreground";
   return (
     <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted">
       <span>
-        VLT <span className="font-mono text-foreground">{pct(assembly.tvis)}</span>
+        VLT <span className={value}>{pct(assembly.tvis)}</span>
       </span>
       <span>
-        Reflect ext <span className="font-mono text-foreground">{pct(assembly.rvisExt)}</span>
+        Reflect ext <span className={value}>{pct(assembly.rvisExt)}</span>
       </span>
       <span>
-        Reflect int <span className="font-mono text-foreground">{pct(assembly.rvisInt)}</span>
+        Reflect int <span className={value}>{pct(assembly.rvisInt)}</span>
       </span>
     </div>
   );
 }
 
-function VerdictChip({ verdict }: { verdict: FitVerdict | null }) {
+function VerdictChip({
+  verdict,
+  estimated = false,
+}: {
+  verdict: FitVerdict | null;
+  estimated?: boolean;
+}) {
+  if (estimated) {
+    return <span className="text-xs text-muted/80">estimated for this construction</span>;
+  }
   if (!verdict) return null;
 
   if (verdict.tone === "exact") {
@@ -219,9 +238,11 @@ function VerdictChip({ verdict }: { verdict: FitVerdict | null }) {
 
 function CondensedBar({
   verdict,
+  estimated,
   onJump,
 }: {
   verdict: FitVerdict | null;
+  estimated: boolean;
   onJump: (feature: DiagramFeature) => void;
 }) {
   const system = useAppStore((s) => s.system);
@@ -271,8 +292,8 @@ function CondensedBar({
       </div>
 
       <div className="flex shrink-0 flex-col items-end gap-0.5">
-        <NumberStrip />
-        <VerdictChip verdict={verdict} />
+        <NumberStrip muted={estimated} />
+        <VerdictChip verdict={verdict} estimated={estimated} />
       </div>
     </div>
   );

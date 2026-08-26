@@ -17,7 +17,7 @@ export function ValidationBanner({
   return (
     <div className="space-y-2">
       {errors.length ? (
-        <Callout tone="danger" title={errors.length === 1 ? "Fix before exporting" : `${errors.length} things to fix before exporting`}>
+        <Callout tone="danger" title={errors.length === 1 ? "Fix before downloading" : `${errors.length} things to fix before downloading`}>
           {errors.map((issue) => (
             <li key={issue.code + issue.field}>{issue.message}</li>
           ))}

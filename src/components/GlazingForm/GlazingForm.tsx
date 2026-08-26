@@ -10,11 +10,11 @@ import {
   type ExportMode,
 } from "@/engine";
 import { useAppStore } from "@/lib/store";
-import { TextInput } from "@/components/ui/fields";
+import { Field, TextInput } from "@/components/ui/fields";
 import { AssemblySection } from "./AssemblySection";
 import { ConstructionSection } from "./ConstructionSection";
 import { DiagramPanel } from "./DiagramPanel";
-import { CoatingCard, FritCard } from "./FeatureCards";
+import { CoatingCard, FritCard, SurfaceFeaturesGhost } from "./FeatureCards";
 import { ResultSection } from "./ResultSection";
 import { ValidationBanner } from "./ValidationBanner";
 
@@ -29,12 +29,12 @@ const MODES: { value: ExportMode; label: string; blurb: string }[] = [
   {
     value: "planar",
     label: "Planar geometry",
-    blurb: "Each opening is a single plane with no thickness. One material for the whole assembly.",
+    blurb: "Each opening is a single plane with no thickness.",
   },
   {
     value: "volumetric",
     label: "Solid lites geometry",
-    blurb: "Each lite is a real solid with its own material; reflections stack the way real IGUs do.",
+    blurb: "Each lite is a real solid; reflections stack like real IGUs.",
   },
 ];
 
@@ -66,7 +66,11 @@ export function GlazingForm() {
   // without also blanking the fit check that explains the glazing.
   const systemIssues = useMemo(() => validateSystem(system), [system]);
   const modeIssues = useMemo(() => validateForMode(system, mode), [system, mode]);
-  const solvable = !hasErrors(systemIssues);
+  // A missing name blocks the download (via modeIssues) but not the physics:
+  // the fit and its verdict describe the glazing, which has no name.
+  const solvable = !systemIssues.some(
+    (issue) => issue.severity === "error" && issue.code !== "name-required",
+  );
   const exportBlocked = hasErrors(modeIssues);
 
   // Solving is closed-form over at most three lites, so it runs inline on every
@@ -82,44 +86,66 @@ export function GlazingForm() {
 
   return (
     <div>
-      <div className="mx-auto flex max-w-[820px] flex-wrap items-center gap-3 px-5 pb-3 pt-5">
-        <div className="min-w-0 flex-1 basis-64">
-          <TextInput
-            value={system.name}
-            onChange={setName}
-            placeholder="Product name, e.g. Solarban 60 on clear"
-            ariaLabel="Product name"
-          />
-        </div>
-        {/* The geometry choice decides everything the tool generates, so it
-            gets card-sized buttons rather than a quiet toggle. */}
-        <div
-          role="radiogroup"
-          aria-label="How the glazing is modeled in 3ds Max"
-          className="flex gap-2"
-        >
-          {MODES.map((option) => {
-            const selected = mode === option.value;
-            return (
-              <button
-                key={option.value}
-                type="button"
-                role="radio"
-                aria-checked={selected}
-                title={option.blurb}
-                onClick={() => setMode(option.value)}
-                className={`flex items-center gap-2.5 rounded-md border px-4 py-2.5 text-[13px] font-semibold transition ${
-                  selected
-                    ? "border-accent bg-accent-soft text-accent"
-                    : "border-border-subtle text-muted hover:border-border-strong hover:text-foreground"
-                }`}
-              >
-                <ModeGlyph mode={option.value} active={selected} />
-                {option.label}
-              </button>
-            );
-          })}
-        </div>
+      <div className="mx-auto max-w-[820px] px-5 pb-3 pt-5">
+        <section className="rounded-lg border border-border-subtle bg-surface p-4">
+          <div className="max-w-md">
+            <Field label="Product name" hint="Used for the material and file names.">
+              <TextInput
+                value={system.name}
+                onChange={setName}
+                placeholder="e.g. Solarban 60 on clear"
+                ariaLabel="Product name"
+              />
+            </Field>
+          </div>
+
+          {/* The geometry choice decides everything the tool generates, so its
+              two options carry their explanations in plain sight. */}
+          <div className="mt-3.5">
+            <p className="text-xs font-medium text-muted">
+              How is the glazing modeled in your 3ds Max scene?
+            </p>
+            <div
+              role="radiogroup"
+              aria-label="How the glazing is modeled in 3ds Max"
+              className="mt-1.5 grid gap-2 sm:grid-cols-2"
+            >
+              {MODES.map((option) => {
+                const selected = mode === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    onClick={() => setMode(option.value)}
+                    className={`rounded-md border p-3 text-left transition ${
+                      selected
+                        ? "border-accent bg-accent-soft"
+                        : "border-border-subtle hover:border-border-strong"
+                    }`}
+                  >
+                    <span
+                      className={`flex items-center gap-2.5 text-[13px] font-semibold ${
+                        selected ? "text-accent" : "text-foreground"
+                      }`}
+                    >
+                      <ModeGlyph mode={option.value} active={selected} />
+                      {option.label}
+                    </span>
+                    <span className="mt-1 block text-[11px] leading-snug text-muted">
+                      {option.blurb}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <p className="mt-3.5 border-t border-border-subtle pt-2.5 text-[11px] text-muted/80">
+            Fill in each card, then download the ZIP at the bottom.
+          </p>
+        </section>
       </div>
 
       <DiagramPanel derived={solved?.derived ?? null} />
@@ -128,6 +154,7 @@ export function GlazingForm() {
         <ConstructionSection />
         <CoatingCard derived={solved?.derived ?? null} />
         <FritCard />
+        <SurfaceFeaturesGhost />
         <AssemblySection />
         <ValidationBanner issues={modeIssues} warnings={solved?.warnings ?? []} />
         <ResultSection derived={solved?.derived ?? null} bundle={bundle} blocked={exportBlocked} />

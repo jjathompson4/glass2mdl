@@ -36,16 +36,7 @@ export function CoatingCard({ derived }: { derived: DerivedOptics | null }) {
   const coatedIndex = system.lites.findIndex((l) => l.coating);
   const coating = coatedIndex >= 0 ? system.lites[coatedIndex].coating : undefined;
 
-  if (!coating) {
-    return (
-      <AddCard
-        id="card-coating"
-        title="Add a coating"
-        blurb="Most performance glazing is coated. Leave it off only for plain tinted or clear glass."
-        onAdd={() => moveCoatingToSurface(system.lites.length > 1 ? 2 : 1)}
-      />
-    );
-  }
+  if (!coating) return null;
 
   const fitted = derived?.coating;
   const overrideCount = coating.overrides ? Object.keys(coating.overrides).length : 0;
@@ -55,6 +46,7 @@ export function CoatingCard({ derived }: { derived: DerivedOptics | null }) {
     <FeatureCardShell
       id="card-coating"
       title="Coating"
+      number={2}
       squareClass="bg-accent"
       borderClass="border-accent/50"
       onRemove={() => setCoating(coatedIndex, undefined)}
@@ -137,26 +129,15 @@ export function CoatingCard({ derived }: { derived: DerivedOptics | null }) {
 
 export function FritCard() {
   const frit = useAppStore((s) => s.system.frit);
-  const liteCount = useAppStore((s) => s.system.lites.length);
   const setFrit = useAppStore((s) => s.setFrit);
 
-  if (!frit) {
-    return (
-      <AddCard
-        id="card-frit"
-        title="Add frit"
-        blurb="Ceramic enamel fused to one surface: dots, lines, or your own pattern file."
-        onAdd={() =>
-          setFrit(defaultFrit(liteCount > 1 ? 2 : 1, { r: 0.9, g: 0.9, b: 0.88 }))
-        }
-      />
-    );
-  }
+  if (!frit) return null;
 
   return (
     <FeatureCardShell
       id="card-frit"
       title="Frit"
+      number={2}
       squareClass="bg-warning"
       borderClass="border-border-subtle"
       onRemove={() => setFrit(undefined)}
@@ -169,6 +150,7 @@ export function FritCard() {
 function FeatureCardShell({
   id,
   title,
+  number,
   squareClass,
   borderClass,
   onRemove,
@@ -176,6 +158,7 @@ function FeatureCardShell({
 }: {
   id: string;
   title: string;
+  number: number;
   squareClass: string;
   borderClass: string;
   onRemove: () => void;
@@ -186,7 +169,11 @@ function FeatureCardShell({
       <header className="mb-3 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <span className={`h-3 w-3 rounded-sm ${squareClass}`} aria-hidden />
-          <h2 className="text-sm font-semibold text-foreground">{title}</h2>
+          <h2 className="text-sm font-semibold text-foreground">
+            <span className="text-accent">{number}</span>
+            <span className="text-muted"> · </span>
+            {title}
+          </h2>
           <span className="text-[11px] text-muted/80">shown on the diagram</span>
         </div>
         <button
@@ -202,35 +189,70 @@ function FeatureCardShell({
   );
 }
 
-function AddCard({
-  id,
-  title,
-  blurb,
-  onAdd,
-}: {
-  id: string;
-  title: string;
-  blurb: string;
-  onAdd: () => void;
-}) {
-  return (
-    <section
-      id={id}
-      className="scroll-mt-32 rounded-lg border border-dashed border-border-strong/60 p-4"
-    >
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-[13px] font-medium text-foreground">{title}</p>
-          <p className="mt-0.5 text-xs text-muted">{blurb}</p>
+export function SurfaceFeaturesGhost() {
+  const system = useAppStore((s) => s.system);
+  const setFrit = useAppStore((s) => s.setFrit);
+  const moveCoatingToSurface = useAppStore((s) => s.moveCoatingToSurface);
+
+  const hasCoating = system.lites.some((l) => l.coating);
+  const hasFrit = Boolean(system.frit);
+  if (hasCoating && hasFrit) return null;
+
+  const addCoating = () => moveCoatingToSurface(system.lites.length > 1 ? 2 : 1);
+  const addFrit = () =>
+    setFrit(defaultFrit(system.lites.length > 1 ? 2 : 1, { r: 0.9, g: 0.9, b: 0.88 }));
+
+  // Neither feature yet: this ghost IS card 2. One feature present: its real
+  // card carries the number and this shrinks to a one-line add row.
+  if (!hasCoating && !hasFrit) {
+    return (
+      <section className="scroll-mt-32 rounded-lg border border-dashed border-border-strong/60 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-foreground">
+              <span className="text-accent">2</span>
+              <span className="text-muted"> · </span>
+              Surface features
+            </p>
+            <p className="mt-0.5 text-xs text-muted">
+              Coating and frit sit on a numbered surface. Most performance glazing has a
+              coating.
+            </p>
+          </div>
+          <div className="flex shrink-0 gap-2">
+            <GhostButton label="Add coating" onClick={addCoating} />
+            <GhostButton label="Add frit" onClick={addFrit} />
+          </div>
         </div>
-        <button
-          type="button"
-          onClick={onAdd}
-          className="shrink-0 rounded-md border border-border-subtle px-3 py-1.5 text-xs font-medium text-foreground transition hover:border-border-strong"
-        >
-          Add
-        </button>
+      </section>
+    );
+  }
+
+  return (
+    <section className="scroll-mt-32 rounded-lg border border-dashed border-border-strong/60 px-4 py-2.5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-xs text-muted">
+          {hasCoating
+            ? "Frit: ceramic enamel fused to one surface, as dots, lines, or your own pattern file."
+            : "Most performance glazing is coated. Leave it off only for plain tinted or clear glass."}
+        </p>
+        <GhostButton
+          label={hasCoating ? "Add frit" : "Add coating"}
+          onClick={hasCoating ? addFrit : addCoating}
+        />
       </div>
     </section>
+  );
+}
+
+function GhostButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="shrink-0 rounded-md border border-border-subtle px-3 py-1.5 text-xs font-medium text-foreground transition hover:border-border-strong"
+    >
+      {label}
+    </button>
   );
 }

@@ -29,7 +29,13 @@ export function AssemblySection() {
   return (
     <Section
       id="card-cutsheet"
-      title="Data sheet values"
+      title={
+        <>
+          <span className="text-accent">3</span>
+          <span className="text-muted"> · </span>
+          Data sheet values
+        </>
+      }
       description="The three visible-light values from the performance table. Behind the scenes, the tool fits each lite's material properties so the rendered assembly reproduces these numbers. Warnings will appear if the fit is unrealistic."
     >
       {/* Typed values are never rewritten — an impossible pair gets flagged

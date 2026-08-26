@@ -48,6 +48,8 @@ interface PaneLayout {
 interface Layout {
   panes: PaneLayout[];
   gapSpans: { start: number; end: number; width: number }[];
+  /** Dashed add-a-lite slot drawn one nominal gap after the last pane. */
+  ghost: { x: number; width: number } | null;
 }
 
 /**
@@ -62,16 +64,22 @@ function layout(
   gaps: GapInput[],
   viewWidth = VIEWBOX_WIDTH,
   padding = PADDING,
+  withGhost = false,
 ): Layout {
   const drawable = viewWidth - padding * 2;
+  // The ghost slot is a nominal 12mm gap plus a 6mm lite, included in the
+  // centering math so the drawing stays balanced with it visible.
+  const ghostMm = withGhost ? 18 : 0;
   const totalMm =
     lites.reduce((sum, l) => sum + Math.max(0, l.thickness), 0) +
-    gaps.reduce((sum, g) => sum + Math.max(0, g.width), 0);
+    gaps.reduce((sum, g) => sum + Math.max(0, g.width), 0) +
+    ghostMm;
 
   const scale = drawable / Math.max(REFERENCE_SPAN_MM, totalMm);
   const totalPx =
     lites.reduce((sum, l) => sum + Math.max(MIN_PANE_PX, l.thickness * scale), 0) +
-    gaps.reduce((sum, g) => sum + Math.max(0, g.width) * scale, 0);
+    gaps.reduce((sum, g) => sum + Math.max(0, g.width) * scale, 0) +
+    ghostMm * scale;
 
   const panes: PaneLayout[] = [];
   const gapSpans: Layout["gapSpans"] = [];
@@ -90,7 +98,11 @@ function layout(
     }
   }
 
-  return { panes, gapSpans };
+  const ghost = withGhost
+    ? { x: cursor + 12 * scale, width: Math.max(MIN_PANE_PX, 6 * scale) }
+    : null;
+
+  return { panes, gapSpans, ghost };
 }
 
 export type DiagramFeature = "coating" | "frit";
@@ -112,6 +124,7 @@ export function SurfaceDiagram({
   fritSurface,
   onFeatureClick,
   onAddAt,
+  onAddLite,
 }: {
   lites: LiteInput[];
   gaps: GapInput[];
@@ -121,8 +134,16 @@ export function SurfaceDiagram({
   onFeatureClick?: (feature: DiagramFeature) => void;
   /** When set, bare surfaces grow a + affordance that adds a feature there. */
   onAddAt?: (surface: SurfaceNumber) => void;
+  /** When set, a dashed ghost pane after the last lite adds one on click. */
+  onAddLite?: () => void;
 }) {
-  const { panes, gapSpans } = layout(lites, gaps);
+  const { panes, gapSpans, ghost } = layout(
+    lites,
+    gaps,
+    VIEWBOX_WIDTH,
+    PADDING,
+    Boolean(onAddLite),
+  );
 
   return (
     <figure>
@@ -215,10 +236,57 @@ export function SurfaceDiagram({
             </text>
           </g>
         ))}
+
+        {ghost && onAddLite ? (
+          <g
+            role="button"
+            tabIndex={0}
+            aria-label="Add a lite"
+            onClick={onAddLite}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                onAddLite();
+              }
+            }}
+            className="cursor-pointer transition-opacity hover:opacity-70"
+          >
+            <rect
+              x={ghost.x}
+              y={GLASS_TOP}
+              width={ghost.width}
+              height={GLASS_BOTTOM - GLASS_TOP}
+              fill="var(--surface)"
+              fillOpacity={0.01}
+              stroke="var(--border-strong)"
+              strokeWidth={1}
+              strokeDasharray="4 3"
+              rx={1}
+              style={{ pointerEvents: "all" }}
+            />
+            <text
+              x={ghost.x + ghost.width / 2}
+              y={(GLASS_TOP + GLASS_BOTTOM) / 2 + 3.5}
+              textAnchor="middle"
+              className="pointer-events-none select-none text-[10px]"
+              style={{ fill: "var(--muted)" }}
+            >
+              +
+            </text>
+            <text
+              x={ghost.x + ghost.width / 2}
+              y={GLASS_BOTTOM + 20}
+              textAnchor="middle"
+              className="pointer-events-none select-none fill-[var(--muted)] text-[8px]"
+            >
+              add lite
+            </text>
+          </g>
+        ) : null}
       </svg>
 
       <figcaption className="px-1 pb-0.5 pt-1 text-[11px] text-muted">
-        Drawn to scale, numbered from the exterior inward. Tap a tag to edit that feature; tap +
+        Drawn to scale, numbered from the exterior inward. Click a tag to edit a feature, or +
         on a bare surface to add one.
       </figcaption>
     </figure>

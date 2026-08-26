@@ -53,11 +53,13 @@ const seededAssembly = (
   };
 };
 
-/** A clear 6mm monolithic lite: the simplest thing that is already correct. */
+/** A clear 6mm monolithic lite: the simplest thing that is already correct.
+ * The name starts empty so the input's example placeholder shows and nothing
+ * ships accidentally named "Untitled"; validation blocks the download. */
 const defaultSystem = (): GlazingSystemInput => {
   const lites = [defaultLite()];
   return {
-    name: "Untitled glazing",
+    name: "",
     lites,
     gaps: [],
     assembly: seededAssembly(lites, {
