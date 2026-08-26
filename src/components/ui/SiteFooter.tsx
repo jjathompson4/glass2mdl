@@ -5,7 +5,7 @@ const linkClass = "text-accent transition hover:opacity-80";
 export function SiteFooter({ showAbout = true }: { showAbout?: boolean }) {
   return (
     <footer className="mt-auto border-t border-border-subtle px-5 py-5">
-      <div className="mx-auto flex max-w-6xl flex-wrap items-baseline justify-between gap-x-8 gap-y-2 text-xs text-muted">
+      <div className="mx-auto flex max-w-6xl flex-col items-center gap-1.5 text-center text-xs text-muted">
         <p>
           Reproduces visible-light appearance for rendering. Not a substitute for thermal or
           daylight analysis.
@@ -19,7 +19,7 @@ export function SiteFooter({ showAbout = true }: { showAbout?: boolean }) {
               <span> · </span>
             </>
           ) : null}
-          Built by Jeff Thompson · Questions or bugs:{" "}
+          Questions or bugs:{" "}
           <a href="mailto:jt@thompsonjeff.com" className={linkClass}>
             jt@thompsonjeff.com
           </a>
