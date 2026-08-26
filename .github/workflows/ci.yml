@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm typecheck:engine
+      - run: pnpm test
+      - run: pnpm build
+
+  # Reserved (phase 2): compile every golden .mdl with the open-source NVIDIA MDL SDK
+  # compiler in a Docker image. Golden files always reflect current emitter output,
+  # so compiling the goldens compiles the product. Enable when the image exists.
+  mdl-compile-check:
+    if: ${{ false }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "TODO run MDL SDK compile check over tests/mdl/__golden__/*.mdl"

@@ -1,0 +1,895 @@
+"""glass2mdl — apply per-face Material IDs and materials to modeled IGUs.
+
+3ds Max 2024, Python/pymxs. Work scales with glazing TYPES, not IGU count:
+face tagging is geometric, QA is one visual pass, material creation happens
+once per (type, lite position).
+
+Face ID convention (extends validation-kit test 03):
+    ID 1 = exterior large face
+    ID 2 = interior large face
+    ID 3 = edge faces
+
+Usage from the 3ds Max listener (after Scripting > Run Script):
+
+    import glass2mdl_apply as ga
+    ga.build_test_scene()        # optional: synthetic boxes to try it on
+    ga.find_glazing()            # 95% case: scan an architect-delivered model,
+                                 # auto-identify lite-shaped solids, select them
+    #   ...review the selection in the viewport, deselect false positives...
+    ga.tag()                     # tag current selection (or ga.tag("*glass*"))
+    ga.qa()                      # red=exterior / blue=interior / green=edges
+    ga.flip_selected()           # exterior/interior guessed wrong? select, flip
+    ga.flip_all()                # ...or flip every tagged IGU at once
+    ga.assign_type("v5227_dgu")  # stamp the type on the current selection when
+                                 # names/layers don't identify the glazing type
+    ga.bind({"*curtain*": "v5227_dgu"})   # per-type Multi-Sub materials
+    # automatic (Iray+ MDL discovery passed 2026-08-25): fills the slots with
+    # scripted Iray+ MDL materials instead of empty drag targets --
+    ga.bind({"*curtain*": "v5227_dgu"},
+            material_factory=ga.make_iray_mdl_factory(ga.EXAMPLE_MANIFEST))
+    ga.report()                  # what is tagged, grouped how
+
+The exterior/interior guess uses the glazing centroid, which is ambiguous for
+a single flat facade — that is what qa() + flip is for: orient the model,
+exterior must read red, flip what is wrong. Consistency matters more than the
+first guess being right.
+
+v1 scope: each lite is a separate solid object (Editable Poly or Editable
+Mesh; pass convert=True to collapse other geometry). Combined-mesh imports
+(Revit "combine by material") are v2.
+"""
+
+import fnmatch
+import math
+
+try:
+    from pymxs import runtime as rt
+except ImportError:  # keeps the file importable/compilable outside Max
+    rt = None
+
+ID_EXTERIOR = 1
+ID_INTERIOR = 2
+ID_EDGE = 3
+
+# Same hues as the validation kit, so red/blue already mean front/back to us.
+QA_COLORS = {
+    ID_EXTERIOR: ("exterior (ID1)", (230, 26, 26)),
+    ID_INTERIOR: ("interior (ID2)", (26, 51, 230)),
+    ID_EDGE: ("edges (ID3)", (26, 204, 51)),
+}
+
+PROP_TAGGED = "g2m_tagged"
+PROP_IGU = "g2m_igu"
+PROP_POSITION = "g2m_position"
+PROP_TYPE = "g2m_type"
+
+# Matches litePositionNames() in src/engine/mdl/naming.ts — material names in
+# the export are `${prefix}_${position}`, so these must not drift.
+def lite_position_names(count):
+    if count == 1:
+        return ["monolithic"]
+    if count == 2:
+        return ["outer", "inner"]
+    if count == 3:
+        return ["outer", "center", "inner"]
+    return ["lite%d" % (i + 1) for i in range(count)]
+
+
+# --- small vector helpers (plain tuples; one pymxs round-trip per vertex) ---
+
+def _v_sub(a, b):
+    return (a[0] - b[0], a[1] - b[1], a[2] - b[2])
+
+def _v_add(a, b):
+    return (a[0] + b[0], a[1] + b[1], a[2] + b[2])
+
+def _v_scale(a, s):
+    return (a[0] * s, a[1] * s, a[2] * s)
+
+def _dot(a, b):
+    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+
+def _length(a):
+    return math.sqrt(_dot(a, a))
+
+def _normalize(a):
+    n = _length(a)
+    return (0.0, 0.0, 0.0) if n < 1e-12 else _v_scale(a, 1.0 / n)
+
+def _v_cross(a, b):
+    return (a[1] * b[2] - a[2] * b[1],
+            a[2] * b[0] - a[0] * b[2],
+            a[0] * b[1] - a[1] * b[0])
+
+
+def _mm(value):
+    """Millimetres in system units — scenes here are often imperial."""
+    return float(rt.units.decodeValue("%gmm" % value))
+
+
+# --- geometry access -------------------------------------------------------
+
+def _vert_transform(obj, sample):
+    """polyop/mesh vert space differs by access path and Max version; decide
+    empirically by which interpretation lands nearer the node's world center."""
+    tm = obj.objectTransform
+    n = len(sample)
+    c = (sum(p.x for p in sample) / n, sum(p.y for p in sample) / n,
+         sum(p.z for p in sample) / n)
+    cw = rt.Point3(c[0], c[1], c[2]) * tm
+    center = obj.center
+    d_raw = _length(_v_sub(c, (center.x, center.y, center.z)))
+    d_tm = _length(_v_sub((cw.x, cw.y, cw.z), (center.x, center.y, center.z)))
+    return tm if d_tm < d_raw else None
+
+
+def _world_faces(obj):
+    """Return (kind, faces) where faces is a list of world-space vertex loops,
+    index-aligned with the object's real faces. None if unsupported."""
+    cls = rt.classOf(obj)
+    loops = []
+    if cls == rt.Editable_Poly:
+        kind = "poly"
+        nf = int(rt.polyop.getNumFaces(obj))
+        raw = []
+        for f in range(1, nf + 1):
+            idxs = list(rt.polyop.getFaceVerts(obj, f))
+            raw.append([rt.polyop.getVert(obj, int(v)) for v in idxs])
+    elif cls == rt.Editable_mesh:
+        kind = "mesh"
+        m = obj.mesh
+        nf = int(m.numfaces)
+        raw = []
+        for f in range(1, nf + 1):
+            face = rt.getFace(m, f)
+            raw.append([rt.getVert(m, int(i)) for i in (face.x, face.y, face.z)])
+    else:
+        return None, None
+
+    sample = [v for loop in raw[: min(len(raw), 8)] for v in loop]
+    tm = _vert_transform(obj, sample)
+    for loop in raw:
+        if tm is not None:
+            loop = [p * tm for p in loop]
+        loops.append([(p.x, p.y, p.z) for p in loop])
+    return kind, loops
+
+
+def _face_geometry(loop):
+    """Newell normal (handles n-gons), area, and centroid of one vertex loop."""
+    nx = ny = nz = 0.0
+    for i, a in enumerate(loop):
+        b = loop[(i + 1) % len(loop)]
+        nx += (a[1] - b[1]) * (a[2] + b[2])
+        ny += (a[2] - b[2]) * (a[0] + b[0])
+        nz += (a[0] - b[0]) * (a[1] + b[1])
+    n = (nx, ny, nz)
+    area = _length(n) * 0.5
+    cx = sum(p[0] for p in loop) / len(loop)
+    cy = sum(p[1] for p in loop) / len(loop)
+    cz = sum(p[2] for p in loop) / len(loop)
+    return _normalize(n), area, (cx, cy, cz)
+
+
+def _cluster_faces(loops, plane_tol):
+    """Group coplanar same-direction faces; imports triangulate, so one lite
+    face arrives as many triangles that must be summed before comparing."""
+    clusters = []
+    for idx, loop in enumerate(loops):
+        n, area, c = _face_geometry(loop)
+        if area <= 0.0:
+            continue
+        d = _dot(n, c)
+        placed = False
+        for cl in clusters:
+            if _dot(n, cl["n"]) > 0.999 and abs(_dot(cl["n"], c) - cl["d"]) < plane_tol:
+                cl["faces"].append(idx + 1)
+                cl["area"] += area
+                cl["center"] = _v_add(cl["center"], _v_scale(c, area))
+                cl["weight"] += area
+                placed = True
+                break
+        if not placed:
+            clusters.append({"n": n, "d": d, "faces": [idx + 1], "area": area,
+                             "center": _v_scale(c, area), "weight": area})
+    for cl in clusters:
+        cl["center"] = _v_scale(cl["center"], 1.0 / cl["weight"])
+    return clusters
+
+
+def _analyze_lite(obj, plane_tol, max_thickness):
+    kind, loops = _world_faces(obj)
+    if loops is None:
+        return None, "unsupported class %s (convert=True to collapse)" % rt.classOf(obj)
+    clusters = _cluster_faces(loops, plane_tol)
+    if len(clusters) < 3:
+        return None, "fewer than 3 planar face groups — not a solid lite"
+    clusters.sort(key=lambda c: c["area"], reverse=True)
+    a, b = clusters[0], clusters[1]
+    if _dot(a["n"], b["n"]) > -0.98:
+        return None, "two largest face groups are not opposite"
+    if b["area"] < 0.5 * a["area"]:
+        return None, "largest opposite faces differ too much in area"
+    thickness = abs(_dot(a["n"], _v_sub(a["center"], b["center"])))
+    if thickness > max_thickness:
+        return None, "thickness %.1f exceeds the lite limit" % thickness
+    big = set(a["faces"]) | set(b["faces"])
+    edges = [f for cl in clusters[2:] for f in cl["faces"] if f not in big]
+    # In-plane extents of the big face: a lite is large in BOTH directions,
+    # while a mullion/frame profile passes every test above yet is narrow in
+    # one — find_glazing() rejects on this, tag() trusts the user's selection.
+    u = _normalize(_v_cross(a["n"], (0.0, 0.0, 1.0) if abs(a["n"][2]) < 0.9
+                            else (1.0, 0.0, 0.0)))
+    v = _v_cross(a["n"], u)
+    us, vs = [], []
+    for fi in a["faces"]:
+        for p in loops[fi - 1]:
+            us.append(_dot(p, u))
+            vs.append(_dot(p, v))
+    extent_min = min(max(us) - min(us), max(vs) - min(vs))
+    return {
+        "extent_min": extent_min,
+        "obj": obj, "kind": kind, "axis": a["n"],
+        "center": ((a["center"][0] + b["center"][0]) / 2,
+                   (a["center"][1] + b["center"][1]) / 2,
+                   (a["center"][2] + b["center"][2]) / 2),
+        "face_area": a["area"], "thickness": thickness,
+        "side_a": {"n": a["n"], "faces": a["faces"]},
+        "side_b": {"n": b["n"], "faces": b["faces"]},
+        "edges": edges,
+    }, None
+
+
+def _set_face_ids(rec, assignments):
+    """assignments: list of (face_list, mat_id)."""
+    obj = rec["obj"]
+    if rec["kind"] == "poly":
+        for faces, mat_id in assignments:
+            if faces:
+                rt.polyop.setFaceMatID(obj, faces, mat_id)
+    else:
+        m = obj.mesh
+        for faces, mat_id in assignments:
+            for f in faces:
+                rt.setFaceMatID(m, f, mat_id)
+        obj.mesh = m
+    rt.update(obj)
+
+
+# --- IGU grouping ----------------------------------------------------------
+
+def _group_igus(records, axial_gap, lateral_factor):
+    groups = []
+    for rec in records:
+        placed = False
+        for g in groups:
+            ref = g[0]
+            if abs(_dot(rec["axis"], ref["axis"])) < 0.98:
+                continue
+            delta = _v_sub(rec["center"], ref["center"])
+            axial = abs(_dot(delta, ref["axis"]))
+            lateral = math.sqrt(max(_dot(delta, delta) - axial * axial, 0.0))
+            radius = math.sqrt(max(rec["face_area"], ref["face_area"]))
+            if axial < axial_gap and lateral < lateral_factor * radius:
+                g.append(rec)
+                placed = True
+                break
+        if not placed:
+            groups.append([rec])
+    return groups
+
+
+def _pick_exterior(groups):
+    """Orient each IGU's axis toward 'outside'. Centroid heuristic; degrades
+    to a globally consistent side (for flat single facades) with a warning."""
+    all_centers = [r["center"] for g in groups for r in g]
+    n = len(all_centers)
+    centroid = (sum(c[0] for c in all_centers) / n,
+                sum(c[1] for c in all_centers) / n,
+                sum(c[2] for c in all_centers) / n)
+    confident = 0
+    axes = []
+    for g in groups:
+        gc = g[0]["center"]
+        ref = _normalize(_v_sub(gc, centroid))
+        d = _dot(g[0]["axis"], ref)
+        axis = g[0]["axis"] if d >= 0 else _v_scale(g[0]["axis"], -1.0)
+        if abs(d) > 0.3:
+            confident += 1
+        axes.append(axis)
+    if confident < max(1, len(groups) // 2):
+        # Flat facade: centroid sits in the glazing plane, every dot ~ 0.
+        # Fall back to one consistent side and let qa() + flip_all() decide.
+        base = axes[0]
+        axes = [a if _dot(a, base) >= 0 else _v_scale(a, -1.0) for a in axes]
+        print("g2m: exterior direction ambiguous (flat facade?) — picked a "
+              "consistent side. Check qa(); flip_all() reverses everything.")
+    for g, axis in zip(groups, axes):
+        for rec in g:
+            rec["ext_axis"] = axis
+    return groups
+
+
+# --- tagged-object bookkeeping ---------------------------------------------
+
+def _tagged_objects():
+    out = []
+    for obj in rt.objects:
+        try:
+            if rt.getUserProp(obj, PROP_TAGGED) == 1 or str(rt.getUserProp(obj, PROP_TAGGED)) == "1":
+                out.append(obj)
+        except Exception:  # noqa: BLE001
+            continue
+    return out
+
+
+def _candidates(pattern):
+    if pattern:
+        hits = []
+        for obj in rt.objects:
+            name = str(obj.name).lower()
+            layer = ""
+            try:
+                layer = str(obj.layer.name).lower()
+            except Exception:  # noqa: BLE001
+                pass
+            if fnmatch.fnmatch(name, pattern.lower()) or fnmatch.fnmatch(layer, pattern.lower()):
+                hits.append(obj)
+        return hits
+    return list(rt.selection)
+
+
+# --- public entry points ---------------------------------------------------
+
+# Name/layer substrings that corroborate a geometric glazing candidate. Purely
+# a confidence signal — geometry alone is enough to qualify.
+GLAZING_NAME_HINTS = ("glass", "glaz", "igu", "vitr", "window", "curtain",
+                      "gl-", "gl_", "vision", "spandrel")
+
+
+def find_glazing(max_faces=2000, min_pane_mm=200.0, plane_tol_mm=1.0,
+                 max_thickness_mm=60.0, axial_gap_mm=150.0,
+                 lateral_factor=0.35, select=True):
+    """Scan the whole scene for glazing candidates and select them for review.
+
+    The 95% case: the architects delivered the facade already modeled per-lite
+    and nobody wants to hand-pick thousands of IGUs. Every object passing the
+    geometric lite test qualifies (thin solid, two large opposite faces, wide
+    in both in-plane directions — mullion profiles fail the width test); name
+    and layer hints only raise confidence, and multi-lite stacks raise it
+    further. Nothing is modified — review the resulting selection in the
+    viewport, deselect any false positives, then run tag().
+    """
+    if rt is None:
+        print("Run inside 3ds Max.")
+        return []
+    plane_tol = _mm(plane_tol_mm)
+    max_thickness = _mm(max_thickness_mm)
+    min_pane = _mm(min_pane_mm)
+
+    candidates = []
+    for obj in rt.objects:
+        cls = rt.classOf(obj)
+        if cls not in (rt.Editable_Poly, rt.Editable_mesh):
+            continue
+        try:
+            nf = (int(rt.polyop.getNumFaces(obj)) if cls == rt.Editable_Poly
+                  else int(obj.mesh.numfaces))
+        except Exception:  # noqa: BLE001
+            continue
+        if nf == 0 or nf > max_faces:
+            continue
+        rec, _why = _analyze_lite(obj, plane_tol, max_thickness)
+        if rec is None or rec["extent_min"] < min_pane:
+            continue
+        name = str(obj.name).lower()
+        layer = ""
+        try:
+            layer = str(obj.layer.name).lower()
+        except Exception:  # noqa: BLE001
+            pass
+        rec["hinted"] = any(h in name or h in layer for h in GLAZING_NAME_HINTS)
+        candidates.append(rec)
+
+    groups = _group_igus(candidates, _mm(axial_gap_mm), lateral_factor)
+    multi = sum(1 for g in groups if len(g) > 1)
+    in_multi = {id(r["obj"]) for g in groups if len(g) > 1 for r in g}
+    # Low confidence = geometry is the only evidence: no name hint AND not
+    # part of a multi-lite stack. Worth a second look before tagging.
+    low = [r["obj"].name for r in candidates
+           if not r["hinted"] and id(r["obj"]) not in in_multi]
+
+    objs = [r["obj"] for r in candidates]
+    if select and objs:
+        rt.select(objs)
+    print("g2m: %d glazing candidates in %d IGU groups (%d multi-lite)%s."
+          % (len(objs), len(groups), multi,
+             "; selected for review" if select and objs else ""))
+    if low:
+        shown = ", ".join(low[:12]) + (" …" if len(low) > 12 else "")
+        print("  low confidence (geometry only, single lite): %s" % shown)
+    if objs:
+        print("  Review the selection, deselect false positives, then: tag()")
+    return objs
+
+
+def assign_type(prefix):
+    """Stamp a glass2mdl export prefix on the current selection.
+
+    The alternative to bind()'s name/layer pattern map, for models whose
+    naming doesn't identify the glazing type: select all IGUs of one type
+    (however you find them), assign, repeat per type. bind() reads this stamp
+    first and falls back to its pattern map."""
+    if rt is None:
+        print("Run inside 3ds Max.")
+        return
+    sel = list(rt.selection)
+    for obj in sel:
+        rt.setUserProp(obj, PROP_TYPE, prefix)
+    print("g2m: type '%s' assigned to %d objects." % (prefix, len(sel)))
+
+
+def tag(pattern=None, convert=False, plane_tol_mm=1.0, max_thickness_mm=60.0,
+        axial_gap_mm=150.0, lateral_factor=0.35):
+    """Tag lites in the selection (or matching a name/layer pattern) with the
+    ID 1/2/3 convention, and group them into IGUs stored as user properties."""
+    if rt is None:
+        print("Run inside 3ds Max.")
+        return
+    objs = _candidates(pattern)
+    if not objs:
+        print("Nothing to tag — select objects or pass a pattern like '*glass*'.")
+        return
+
+    plane_tol = _mm(plane_tol_mm)
+    max_thickness = _mm(max_thickness_mm)
+    axial_gap = _mm(axial_gap_mm)
+
+    records, skipped = [], []
+    with _UndoBlock():
+        for obj in objs:
+            if convert and rt.classOf(obj) not in (rt.Editable_Poly, rt.Editable_mesh):
+                try:
+                    rt.convertToPoly(obj)
+                except Exception:  # noqa: BLE001
+                    pass
+            rec, why = _analyze_lite(obj, plane_tol, max_thickness)
+            if rec is None:
+                skipped.append((obj.name, why))
+            else:
+                records.append(rec)
+
+        groups = _pick_exterior(_group_igus(records, axial_gap, lateral_factor))
+
+        for igu_idx, group in enumerate(groups):
+            group.sort(key=lambda r: _dot(r["center"], r["ext_axis"]), reverse=True)
+            names = lite_position_names(len(group))
+            for rec, position in zip(group, names):
+                ext = rec["ext_axis"]
+                if _dot(rec["side_a"]["n"], ext) > 0:
+                    ext_faces, int_faces = rec["side_a"]["faces"], rec["side_b"]["faces"]
+                else:
+                    ext_faces, int_faces = rec["side_b"]["faces"], rec["side_a"]["faces"]
+                _set_face_ids(rec, [(ext_faces, ID_EXTERIOR),
+                                    (int_faces, ID_INTERIOR),
+                                    (rec["edges"], ID_EDGE)])
+                obj = rec["obj"]
+                rt.setUserProp(obj, PROP_TAGGED, "1")
+                rt.setUserProp(obj, PROP_IGU, str(igu_idx))
+                rt.setUserProp(obj, PROP_POSITION, position)
+
+    print("g2m: tagged %d lites in %d IGUs; skipped %d."
+          % (len(records), len(groups), len(skipped)))
+    for name, why in skipped:
+        print("  skipped %s: %s" % (name, why))
+
+
+class _UndoBlock:
+    """Bulk face edits inside one undo record keeps Max responsive."""
+
+    def __enter__(self):
+        try:
+            rt.execute("theHold.Begin()")
+        except Exception:  # noqa: BLE001
+            pass
+        return self
+
+    def __exit__(self, *exc):
+        try:
+            rt.execute('theHold.Accept "glass2mdl"')
+        except Exception:  # noqa: BLE001
+            pass
+        return False
+
+
+def _diag_material(name, rgb):
+    try:
+        m = rt.PhysicalMaterial()
+        m.base_color = rt.Color(rgb[0], rgb[1], rgb[2])
+    except Exception:  # noqa: BLE001
+        m = rt.StandardMaterial()
+        m.diffuse = rt.Color(rgb[0], rgb[1], rgb[2])
+    m.name = name
+    return m
+
+
+def qa():
+    """Assign the red/blue/green diagnostic Multi-Sub to every tagged lite.
+    Orbit the model: exterior must read red everywhere."""
+    if rt is None:
+        print("Run inside 3ds Max.")
+        return
+    mm = rt.MultiMaterial(numsubs=3)
+    mm.name = "g2m_QA"
+    for mat_id, (label, rgb) in QA_COLORS.items():
+        mm.materialList[mat_id - 1] = _diag_material("g2m_QA_%s" % label, rgb)
+        mm.names[mat_id - 1] = label
+    tagged = _tagged_objects()
+    for obj in tagged:
+        obj.material = mm
+    print("g2m: QA material on %d objects. Red out, blue in, green edges."
+          % len(tagged))
+
+
+def _flip_igu(members):
+    """Swap exterior/interior on every lite of one IGU, and reverse the lite
+    positions (outer becomes inner) so bind() stays consistent."""
+    positions = [str(rt.getUserProp(o, PROP_POSITION)) for o in members]
+    for obj, new_pos in zip(members, reversed(positions)):
+        kind = "poly" if rt.classOf(obj) == rt.Editable_Poly else "mesh"
+        if kind == "poly":
+            nf = int(rt.polyop.getNumFaces(obj))
+            ones = [f for f in range(1, nf + 1)
+                    if int(rt.polyop.getFaceMatID(obj, f)) == ID_EXTERIOR]
+            twos = [f for f in range(1, nf + 1)
+                    if int(rt.polyop.getFaceMatID(obj, f)) == ID_INTERIOR]
+            _set_face_ids({"obj": obj, "kind": kind},
+                          [(ones, ID_INTERIOR), (twos, ID_EXTERIOR)])
+        else:
+            m = obj.mesh
+            nf = int(m.numfaces)
+            ones = [f for f in range(1, nf + 1)
+                    if int(rt.getFaceMatID(m, f)) == ID_EXTERIOR]
+            twos = [f for f in range(1, nf + 1)
+                    if int(rt.getFaceMatID(m, f)) == ID_INTERIOR]
+            for f in ones:
+                rt.setFaceMatID(m, f, ID_INTERIOR)
+            for f in twos:
+                rt.setFaceMatID(m, f, ID_EXTERIOR)
+            obj.mesh = m
+            rt.update(obj)
+        rt.setUserProp(obj, PROP_POSITION, new_pos)
+
+
+def _igus_of(objects):
+    igus = {}
+    for obj in objects:
+        igu = rt.getUserProp(obj, PROP_IGU)
+        if igu is not None:
+            igus.setdefault(str(igu), None)
+    members = {k: [] for k in igus}
+    for obj in _tagged_objects():
+        key = str(rt.getUserProp(obj, PROP_IGU))
+        if key in members:
+            members[key].append(obj)
+    return members
+
+
+def flip_selected():
+    """Flip every IGU touched by the current selection (whole IGUs flip
+    together — a wrong exterior guess is wrong for all its lites)."""
+    if rt is None:
+        print("Run inside 3ds Max.")
+        return
+    members = _igus_of(list(rt.selection))
+    for key, objs in members.items():
+        _flip_igu(objs)
+    print("g2m: flipped %d IGU(s)." % len(members))
+
+
+def flip_all():
+    if rt is None:
+        print("Run inside 3ds Max.")
+        return
+    members = _igus_of(_tagged_objects())
+    for objs in members.values():
+        _flip_igu(objs)
+    print("g2m: flipped all %d IGU(s)." % len(members))
+
+
+# --- Automatic Iray+ MDL material creation -------------------------------
+# Proven 2026-08-25 by scripts/max/discover_iray_mdl_api.py (creation
+# round-trip): a fresh Iray+ material loads a custom module by its
+# fully-qualified type name, and its parameters are set through the Iray+ irp*
+# API. Same path the in-house Iray-Mapper uses (create_iray_material /
+# safe_irp_set).
+
+
+def create_iray_mdl_material(type_name, params=None, enable_emission=False, name=None):
+    """Create one Iray+ material backed by a custom MDL module.
+
+    type_name: the fully-qualified Iray+ type, e.g.
+        "mdl::validation_kit::agc_v5227_dgu_solid_reference::"
+        "agc_v5227_dgu_solid(float,float,float,float,bool)"
+    params: {mdl_param_name: value}, e.g. {"visible_transmittance": 0.53,
+        "interior_face": True}. Keys are the MDL parameter names (the suffix
+        after the type), not the full irp key.
+    Returns the material, or None if the Iray+ API is unavailable or the type
+    is rejected.
+    """
+    if rt is None:
+        print("Run inside 3ds Max.")
+        return None
+    if not hasattr(rt, "irpSetMaterialType"):
+        print("g2m: Iray+ MDL API not available (irpSetMaterialType missing).")
+        return None
+    try:
+        mat = rt.Iray__Material()
+    except Exception as exc:  # noqa: BLE001
+        print("g2m: Iray__Material() failed: %s" % exc)
+        return None
+    try:
+        rt.irpSetMaterialType(mat, type_name, enable_emission)
+    except Exception as exc:  # noqa: BLE001
+        print("g2m: irpSetMaterialType failed for %s: %s" % (type_name, exc))
+        return None
+    if name:
+        try:
+            mat.name = name
+        except Exception:  # noqa: BLE001
+            pass
+    if params:
+        _set_irp_params(mat, type_name, params)
+    return mat
+
+
+def _set_irp_params(mat, type_name, params):
+    """Set MDL params via the irp* API, guarded against the live property list.
+    The full key is `<type_name>_<param>`; fall back to a unique suffix match if
+    the stored type string differs in signature formatting."""
+    try:
+        plist = [str(p) for p in rt.irpGetPropertyList(mat)]
+    except Exception:  # noqa: BLE001
+        plist = []
+    known = set(plist)
+    for pname, val in params.items():
+        key = type_name + "_" + pname
+        if key not in known:
+            suffix = "_" + pname
+            matches = [p for p in plist if p.endswith(suffix)]
+            key = matches[0] if len(matches) == 1 else None
+        if key is None:
+            print("g2m: no Iray+ property for MDL param '%s' (skipped)." % pname)
+            continue
+        try:
+            rt.irpSetProperty(mat, key, val)
+        except Exception as exc:  # noqa: BLE001
+            print("g2m: irpSetProperty failed for '%s': %s" % (key, exc))
+
+
+def load_manifest(path):
+    """Read a bind_manifest.json from a glass2mdl volumetric export.
+
+    Returns the factory-shaped mapping for make_iray_mdl_factory. Accepts both
+    the shipped envelope ({"format": ..., "types": {...}}) and a bare mapping.
+
+        ga.bind({"*gl-01*": "v5227_dgu"},
+                material_factory=ga.make_iray_mdl_factory(
+                    ga.load_manifest(r"C:\\path\\to\\bind_manifest.json")))
+    """
+    import json
+    with open(path, "r", encoding="utf-8") as fh:
+        data = json.load(fh)
+    return data.get("types", data)
+
+
+def make_iray_mdl_factory(manifest):
+    """Build a bind() material_factory from a manifest.
+
+    manifest: {export_prefix: {
+        "type_name": <fully-qualified Iray+ MDL type>,
+        "params": {param: value, ...},               # shared across faces
+        "slot_params": {"exterior": {...}, "interior": {...}, "edge": {...}},
+        "enable_emission": False,                     # optional
+    }}
+
+    The returned factory(prefix, position, slot) creates one Iray+ material per
+    face, merging the shared params with the per-slot override (e.g.
+    interior_face True on the interior face, False on the exterior).
+
+    A spec may instead nest per-lite specs under "by_position" keyed by lite
+    position ("outer"/"inner"/...), so a DGU can give its outer and inner lites
+    different materials. "_default" catches any unlisted position.
+    """
+    def factory(prefix, position, slot):
+        spec = manifest.get(prefix)
+        if spec is None:
+            return None
+        by_pos = spec.get("by_position")
+        if by_pos is not None:
+            spec = by_pos.get(position) or by_pos.get("_default")
+            if spec is None:
+                return None
+        params = dict(spec.get("params", {}))
+        params.update(spec.get("slot_params", {}).get(slot, {}))
+        return create_iray_mdl_material(
+            spec["type_name"],
+            params,
+            enable_emission=bool(spec.get("enable_emission", False)),
+            name="g2m_%s_%s_%s" % (prefix, position, slot),
+        )
+    return factory
+
+
+# Example manifest for the render-validated V5227 DGU solid (VLT 0.529 vs 0.53).
+# The real manifest will ship in the glass2mdl export; this proves the path and
+# lets bind() run fully automatic against the already-deployed module today.
+EXAMPLE_MANIFEST = {
+    "v5227_dgu": {
+        "type_name": (
+            "mdl::validation_kit::agc_v5227_dgu_solid_reference::"
+            "agc_v5227_dgu_solid(float,float,float,float,bool)"
+        ),
+        "params": {
+            "visible_transmittance": 0.53,
+            "rvis_exterior": 0.17,
+            "rvis_interior": 0.13,
+            "lite_thickness_mm": 24.0,
+        },
+        "slot_params": {
+            "exterior": {"interior_face": False},
+            "interior": {"interior_face": True},
+            "edge": {"interior_face": False},
+        },
+        "enable_emission": False,
+    },
+}
+
+
+# ACCURATE per-lite V5227 DGU: distinct outer (coated) and inner (clear) lites,
+# fitted so the two-lite assembly reproduces the datasheet (Tvis 0.53 / Rf 0.17 /
+# Rb 0.13). Requires mdl/templates/g2m_v5227_dgu.mdl deployed under
+# %USERPROFILE%\Documents\mdl\validation_kit\. Use on a DOUBLE-lite scene so the
+# outer/inner positions resolve.
+V5227_DGU_MANIFEST = {
+    "v5227_dgu": {
+        "by_position": {
+            "outer": {
+                "type_name": (
+                    "mdl::validation_kit::g2m_v5227_dgu::"
+                    "g2m_v5227_dgu_outer(float,float,float,float,bool)"
+                ),
+                "params": {
+                    "visible_transmittance": 0.5746,
+                    "rvis_exterior": 0.1429,
+                    "rvis_interior": 0.0571,
+                    "lite_thickness_mm": 6.0,
+                },
+                "slot_params": {
+                    "exterior": {"interior_face": False},
+                    "interior": {"interior_face": True},
+                    "edge": {"interior_face": False},
+                },
+            },
+            "inner": {
+                "type_name": (
+                    "mdl::validation_kit::g2m_v5227_dgu::"
+                    "g2m_v5227_dgu_inner(float)"
+                ),
+                "params": {"ior": 1.52},
+            },
+        },
+    },
+}
+
+
+def bind(type_map=None, material_factory=None):
+    """Build one Multi-Sub per (glazing type, lite position) and assign it.
+
+    The glazing type of each lite resolves in order:
+      1. the `g2m_type` stamp from assign_type() (selection-based typing), then
+      2. type_map: {name_or_layer_fnmatch_pattern: glass2mdl_export_prefix},
+         e.g. {"*curtain*": "v5227_dgu"} — the option for models whose names
+         or layers identify the type.
+    Either alone is enough; lites resolving to no type are left untouched and
+    counted as unmatched.
+
+    material_factory(prefix, position, slot) -> material or None, where slot
+    is one of "exterior"/"interior"/"edge". The Iray+ MDL discovery run
+    (scripts/max/discover_iray_mdl_api.py) PASSED 2026-08-25, so automatic
+    creation is available: pass
+    material_factory=make_iray_mdl_factory(manifest) (see EXAMPLE_MANIFEST).
+    Leave it None to keep the one-drag-per-type fallback: slots stay empty and
+    each is a single drag from the material browser, once per type not per IGU.
+    """
+    if rt is None:
+        print("Run inside 3ds Max.")
+        return
+    multis = {}
+    bound = unmatched = 0
+    for obj in _tagged_objects():
+        stamped = rt.getUserProp(obj, PROP_TYPE)
+        prefix = str(stamped) if stamped not in (None, "", "undefined") else None
+        if prefix is None and type_map:
+            name = str(obj.name).lower()
+            layer = ""
+            try:
+                layer = str(obj.layer.name).lower()
+            except Exception:  # noqa: BLE001
+                pass
+            for pattern, pfx in type_map.items():
+                if fnmatch.fnmatch(name, pattern.lower()) or fnmatch.fnmatch(layer, pattern.lower()):
+                    prefix = pfx
+                    break
+        if prefix is None:
+            unmatched += 1
+            continue
+        position = str(rt.getUserProp(obj, PROP_POSITION))
+        key = (prefix, position)
+        if key not in multis:
+            mm = rt.MultiMaterial(numsubs=3)
+            mm.name = "g2m_%s_%s" % (prefix, position)
+            for i, slot in enumerate(("exterior", "interior", "edge")):
+                mm.names[i] = "%s face (ID%d)" % (slot, i + 1)
+                mat = material_factory(prefix, position, slot) if material_factory else None
+                mm.materialList[i] = mat
+            multis[key] = mm
+        obj.material = multis[key]
+        bound += 1
+    print("g2m: bound %d objects to %d Multi-Sub materials; %d unmatched."
+          % (bound, len(multis), unmatched))
+    if material_factory is None and multis:
+        print("Slots are empty by design — drag the glass2mdl materials from")
+        print("the browser into each Multi-Sub once (per type, not per IGU):")
+        for (prefix, position), mm in sorted(multis.items()):
+            print("  %s  <- module material '%s_%s' (per-face names arrive "
+                  "with the coated-solid emitter)" % (mm.name, prefix, position))
+
+
+def report():
+    if rt is None:
+        print("Run inside 3ds Max.")
+        return
+    tagged = _tagged_objects()
+    igus = {}
+    for obj in tagged:
+        igus.setdefault(str(rt.getUserProp(obj, PROP_IGU)), []).append(
+            (str(obj.name), str(rt.getUserProp(obj, PROP_POSITION))))
+    print("g2m: %d tagged lites in %d IGUs." % (len(tagged), len(igus)))
+    for key in sorted(igus, key=lambda k: int(k) if k.isdigit() else 0):
+        listing = ", ".join("%s(%s)" % pair for pair in igus[key])
+        print("  IGU %s: %s" % (key, listing))
+
+
+def clear_tags():
+    if rt is None:
+        print("Run inside 3ds Max.")
+        return
+    n = 0
+    for obj in _tagged_objects():
+        rt.setUserProp(obj, PROP_TAGGED, "0")
+        n += 1
+    print("g2m: cleared %d tags." % n)
+
+
+def build_test_scene():
+    """Three double-lite IGUs plus one rotated copy, for a dry run of
+    tag() -> qa() -> flip_selected() -> bind() before touching a real model."""
+    if rt is None:
+        print("Run inside 3ds Max.")
+        return
+    lite_w, lite_h, lite_t, gap = _mm(1500), _mm(1000), _mm(6), _mm(12)
+    made = []
+    for i in range(4):
+        for j, side in enumerate(("outer", "inner")):
+            box = rt.Box(width=lite_w, length=lite_t, height=lite_h)
+            box.name = "g2m_test_igu%d_glass_%s" % (i, side)
+            box.position = rt.Point3(i * _mm(2500), -j * (lite_t + gap), 0.0)
+            rt.convertToPoly(box)
+            made.append(box)
+        if i == 3:
+            for box in made[-2:]:
+                rt.rotate(box, rt.eulerangles(0, 0, 90))
+    rt.select(made)
+    print("g2m: built %d test lites (IGU 3 is rotated 90 degrees). Now: tag()"
+          % len(made))

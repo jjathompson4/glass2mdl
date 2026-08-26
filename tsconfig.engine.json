@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    // The engine is a pure, platform-free library: no DOM, no framework types.
+    "lib": ["esnext"],
+    "types": [],
+    "noEmit": true,
+    "allowJs": false,
+    "plugins": []
+  },
+  "include": ["src/engine/**/*.ts"],
+  "exclude": ["node_modules"]
+}

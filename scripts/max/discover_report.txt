@@ -1,0 +1,73 @@
+glass2mdl Iray+ MDL API discovery
+  3ds Max version: <Array<#(26000, 64, 0, 26, 1, 0, 2270, 2024, ".1 Update")>>
+  Iray+ API present (irpGetPropertyList): True
+
+== Material / texture classes matching 'iray' or 'mdl' ==
+  material.classes (92 total):
+    MDLMaterial
+    Iray__Materialmaterial
+    VRayMDLMtl
+    Iray__Material
+    Iray__Materialmaterial
+  textureMap.classes (1056 total):
+    Iray__Perlin_Noise
+    Iray__Brushed_Metal
+    Iray__Flake_Noise
+    Iray__Colour_Correction
+    MDLFunction
+    Iray__Flow_Noise
+    Iray__Worley_Noise
+    Iray__Checker
+    Iray__Tiles
+
+== Candidate MDL classes — in-memory schema (never assigned/saved) ==
+  -- MDLMaterial --
+    classOf: <material<MDLMaterial>>
+    getPropNames (3): mname, tname, fname
+    irpGetPropertyList: <MAXScript exception raised.
+-- Runtime error: function needs an Iray+ object got:MDLMaterial:MDLMaterial>
+  -- Iray__Materialmaterial --
+    classOf: <material<Iray__Materialmaterial>>
+    getPropNames (1): texture
+    irpGetPropertyList (7): BaseGeometry_Opacity, BaseGeometry_CornerRadius, BaseGeometry_Normal, BaseGeometry_Displacement, Copper_Roughness, Copper_Anisotropy, Copper_AnisotropyRotation
+  -- VRayMDLMtl --
+    classOf: <material<VRayMDLMtl>>
+    getPropNames (15): mdl_filename, mdl_module_name, mdl_material, mdl_material_name, max_ray_depth, show_preview, clamp_shader_result, clamping_limit, viewport_color, wrap_texture_coordinates, mdl_material_signature, message_log, tweakCount, isShaderLoaded, searchPaths
+    irpGetPropertyList: <MAXScript exception raised.
+-- Runtime error: function needs an Iray+ object got:VRayMDLMtl:VRayMDLMtl>
+  -- Iray__Material --
+    classOf: <material<Iray__Material>>
+    getPropNames (1): texture
+    irpGetPropertyList (6): BaseGeometry_Opacity, BaseGeometry_CornerRadius, BaseGeometry_Normal, BaseGeometry_Displacement, Matte_Colour, Matte_DiffuseRoughness
+  -- MDLFunction --
+    classOf: <textureMap<MDLFunction>>
+    getPropNames (3): mname, tname, fname
+    irpGetPropertyList: <MAXScript exception raised.
+-- Runtime error: function needs an Iray+ object got:MDLFunction:MDLFunction>
+
+== Creation round-trip (Iray__Material + irpSetMaterialType) ==
+  type_name: mdl::validation_kit::agc_v5227_dgu_solid_reference::agc_v5227_dgu_solid(float,float,float,float,bool)
+  irpSetMaterialType: OK
+  irpGetPropertyList after set: 9 total, 5 mdl::
+    mdl::validation_kit::agc_v5227_dgu_solid_reference::agc_v5227_dgu_solid(float,float,float,float,bool)_visible_transmittance = 0.5299999713897705
+    mdl::validation_kit::agc_v5227_dgu_solid_reference::agc_v5227_dgu_solid(float,float,float,float,bool)_rvis_exterior = 0.17000000178813934
+    mdl::validation_kit::agc_v5227_dgu_solid_reference::agc_v5227_dgu_solid(float,float,float,float,bool)_rvis_interior = 0.12999999523162842
+    mdl::validation_kit::agc_v5227_dgu_solid_reference::agc_v5227_dgu_solid(float,float,float,float,bool)_lite_thickness_mm = 24.0
+    mdl::validation_kit::agc_v5227_dgu_solid_reference::agc_v5227_dgu_solid(float,float,float,float,bool)_interior_face = False
+  RESULT: PASS — scripted creation works; bind() can use a factory.
+
+Target: material of selected object 'Box001'
+== Material survey ==
+  classOf: <material<Iray__Material>>
+  superClassOf: <MAXWrapper<material>>
+  name: 'Material #26'
+-- getPropNames --
+  getPropNames: [<Name<texture>>]
+  texture (value, class): (<ArrayParameter<#(undefined, undefined, undefined, undefined)>>, <Value<ArrayParameter>>)
+-- irpGetPropertyList (Iray+ view of the same material) --
+  irpGetPropertyList: ['mdl::validation_kit::agc_v5227_dgu_solid_reference::agc_v5227_dgu_solid(float,float,float,float,bool)_visible_transmittance', 'mdl::validation_kit::agc_v5227_dgu_solid_reference::agc_v5227_dgu_solid(float,float,float,float,bool)_rvis_exterior', 'mdl::validation_kit::agc_v5227_dgu_solid_reference::agc_v5227_dgu_solid(float,float,float,float,bool)_rvis_interior', 'mdl::validation_kit::agc_v5227_dgu_solid_reference::agc_v5227_dgu_solid(float,float,float,float,bool)_lite_thickness_mm', 'mdl::validation_kit::agc_v5227_dgu_solid_reference::agc_v5227_dgu_solid(float,float,float,float,bool)_interior_face']
+  irp mdl::validation_kit::agc_v5227_dgu_solid_reference::agc_v5227_dgu_solid(float,float,float,float,bool)_visible_transmittance: 0.5299999713897705
+  irp mdl::validation_kit::agc_v5227_dgu_solid_reference::agc_v5227_dgu_solid(float,float,float,float,bool)_rvis_exterior: 0.17000000178813934
+  irp mdl::validation_kit::agc_v5227_dgu_solid_reference::agc_v5227_dgu_solid(float,float,float,float,bool)_rvis_interior: 0.12999999523162842
+  irp mdl::validation_kit::agc_v5227_dgu_solid_reference::agc_v5227_dgu_solid(float,float,float,float,bool)_lite_thickness_mm: 24.0
+  irp mdl::validation_kit::agc_v5227_dgu_solid_reference::agc_v5227_dgu_solid(float,float,float,float,bool)_interior_face: False
