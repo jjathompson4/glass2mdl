@@ -731,19 +731,35 @@ def create_iray_mdl_material(type_name, params=None, enable_emission=False, name
         except Exception:  # noqa: BLE001
             pass
     if params:
-        _set_irp_params(mat, type_name, params)
+        if _set_irp_params(mat, type_name, params) == 0:
+            # Every parameter missing means the renderer never loaded the
+            # module: the material would render as the pink/grey fallback.
+            # Refuse it and say exactly where the file has to live.
+            seg = type_name.split("::")
+            folder = seg[1] if len(seg) > 3 else "<export folder>"
+            module = seg[2] if len(seg) > 3 else "<module>"
+            print("g2m: MODULE NOT RESOLVED: %s" % type_name)
+            print("     None of its parameters exist on the created material, so")
+            print("     Iray could not load %s.mdl from disk." % module)
+            print("     Fix: the exported folder '%s' must sit DIRECTLY" % folder)
+            print("     under a folder listed in Iray+ settings > MDL search")
+            print("     paths (the folder's parent on disk IS the search path).")
+            print("     Move it there, then Bind again.")
+            return None
     return mat
 
 
 def _set_irp_params(mat, type_name, params):
     """Set MDL params via the irp* API, guarded against the live property list.
     The full key is `<type_name>_<param>`; fall back to a unique suffix match if
-    the stored type string differs in signature formatting."""
+    the stored type string differs in signature formatting. Returns how many
+    parameters were actually set."""
     try:
         plist = [str(p) for p in rt.irpGetPropertyList(mat)]
     except Exception:  # noqa: BLE001
         plist = []
     known = set(plist)
+    set_count = 0
     for pname, val in params.items():
         key = type_name + "_" + pname
         if key not in known:
@@ -755,8 +771,10 @@ def _set_irp_params(mat, type_name, params):
             continue
         try:
             rt.irpSetProperty(mat, key, val)
+            set_count += 1
         except Exception as exc:  # noqa: BLE001
             print("g2m: irpSetProperty failed for '%s': %s" % (key, exc))
+    return set_count
 
 
 def load_manifest(path):
