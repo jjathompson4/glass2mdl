@@ -61,6 +61,28 @@ export default function About() {
             can enter.
           </p>
 
+          <h2 className="pt-2 text-base font-semibold">Limitations, for now</h2>
+          <ul className="list-disc space-y-2 pl-5">
+            <li>
+              One coating per glazing unit. If your product has two coatings, the exported
+              glass still matches the data sheet numbers overall; you just cannot set the
+              second coating up separately yet. Support for that is planned.
+            </li>
+            <li>
+              One frit pattern, on one surface. In the solid lites workflow the frit comes as
+              its own material: in 3ds Max, you make a thin plane just in front of the fritted
+              surface and apply it there yourself. The script does not do this part.
+            </li>
+            <li>
+              Data sheets report light at straight-on incidence only, so behavior at glancing
+              angles follows a standard falloff curve rather than measured data.
+            </li>
+            <li>
+              Outputs are tested in Iray+ 3.1 for 3ds Max 2024. Other MDL renderers are
+              untested.
+            </li>
+          </ul>
+
           <h2 className="pt-2 text-base font-semibold">Built by</h2>
           <p>
             Jeff has 10 years of experience in lighting design, architectural visualization,

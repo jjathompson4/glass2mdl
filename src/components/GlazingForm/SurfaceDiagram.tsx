@@ -18,7 +18,7 @@ import {
  * navigation: tapping one jumps to that feature's card.
  */
 
-const VIEWBOX_WIDTH = 420;
+const VIEWBOX_WIDTH = 500;
 const HEIGHT = 190;
 const GLASS_TOP = 52;
 const GLASS_BOTTOM = 152;
@@ -26,14 +26,15 @@ const PADDING = 26;
 
 /**
  * Millimetres of build-up the drawing is sized around — a generous triple
- * (6 + 12 + 6 + 12 + 6 = 42mm) plus headroom.
+ * (6 + 12 + 6 + 12 + 6 = 42mm) plus room for the add-lite ghost and the
+ * mid-height EXTERIOR/INTERIOR labels beside the glass.
  *
  * The scale is fixed against this rather than stretched to fill the width, so
  * a 6mm lite is drawn the same width whether it stands alone or sits in a
  * triple. Fitting to width made a monolithic lite look ten times thicker than
  * the identical lite in an IGU, which reads as the glass having changed.
  */
-const REFERENCE_SPAN_MM = 52;
+const REFERENCE_SPAN_MM = 68;
 
 /** Keeps a thin lite visible even at true scale. */
 const MIN_PANE_PX = 9;
@@ -67,19 +68,14 @@ function layout(
   withGhost = false,
 ): Layout {
   const drawable = viewWidth - padding * 2;
-  // The ghost slot is a nominal 12mm gap plus a 6mm lite, included in the
-  // centering math so the drawing stays balanced with it visible.
-  const ghostMm = withGhost ? 18 : 0;
   const totalMm =
     lites.reduce((sum, l) => sum + Math.max(0, l.thickness), 0) +
-    gaps.reduce((sum, g) => sum + Math.max(0, g.width), 0) +
-    ghostMm;
+    gaps.reduce((sum, g) => sum + Math.max(0, g.width), 0);
 
   const scale = drawable / Math.max(REFERENCE_SPAN_MM, totalMm);
   const totalPx =
     lites.reduce((sum, l) => sum + Math.max(MIN_PANE_PX, l.thickness * scale), 0) +
-    gaps.reduce((sum, g) => sum + Math.max(0, g.width) * scale, 0) +
-    ghostMm * scale;
+    gaps.reduce((sum, g) => sum + Math.max(0, g.width) * scale, 0);
 
   const panes: PaneLayout[] = [];
   const gapSpans: Layout["gapSpans"] = [];
@@ -98,8 +94,11 @@ function layout(
     }
   }
 
+  // The ghost is an affordance, not geometry: it hangs a fixed 14px off the
+  // right of the centered build-up so the real lites never shift to make
+  // room for it.
   const ghost = withGhost
-    ? { x: cursor + 12 * scale, width: Math.max(MIN_PANE_PX, 6 * scale) }
+    ? { x: cursor + 14, width: Math.max(MIN_PANE_PX, 6 * scale) }
     : null;
 
   return { panes, gapSpans, ghost };
@@ -145,6 +144,20 @@ export function SurfaceDiagram({
     Boolean(onAddLite),
   );
 
+  // A coating and a frit facing each other across one cavity (surfaces k and
+  // k+1 with k even) would meet at the same mid-height; nudge them apart.
+  const facingAcrossCavity =
+    coatingSurface !== undefined &&
+    fritSurface !== undefined &&
+    Math.abs(coatingSurface - fritSurface) === 1 &&
+    Math.min(coatingSurface, fritSurface) % 2 === 0;
+  const nudgeFor = (surface: SurfaceNumber): number =>
+    facingAcrossCavity && (surface === coatingSurface || surface === fritSurface)
+      ? surface % 2 === 0
+        ? -10
+        : 10
+      : 0;
+
   return (
     <figure>
       <svg
@@ -153,8 +166,8 @@ export function SurfaceDiagram({
         role="img"
         aria-label={`Cross-section of ${lites.length}-lite glazing, exterior at left`}
       >
-        {/* Side labels sit at mid-height, hard against the edges — at the top
-            they collided with a triple's surface markers. */}
+        {/* Mid-height side labels; the reference span leaves room for them
+            beside the widest build-up plus the add-lite ghost. */}
         <text
           x={6}
           y={(GLASS_TOP + GLASS_BOTTOM) / 2 + 3}
@@ -207,6 +220,7 @@ export function SurfaceDiagram({
                   x={edgeX}
                   hasCoating={coatingSurface === surface}
                   hasFrit={fritSurface === surface}
+                  yNudge={nudgeFor(surface)}
                   onFeatureClick={onFeatureClick}
                   onAdd={onAddAt ? () => onAddAt(surface) : undefined}
                 />
@@ -249,7 +263,7 @@ export function SurfaceDiagram({
                 onAddLite();
               }
             }}
-            className="cursor-pointer transition-opacity hover:opacity-70"
+            className="cursor-pointer opacity-60 outline-none transition-opacity hover:opacity-100 focus:outline-none"
           >
             <rect
               x={ghost.x}
@@ -258,7 +272,7 @@ export function SurfaceDiagram({
               height={GLASS_BOTTOM - GLASS_TOP}
               fill="var(--surface)"
               fillOpacity={0.01}
-              stroke="var(--border-strong)"
+              stroke="var(--border)"
               strokeWidth={1}
               strokeDasharray="4 3"
               rx={1}
@@ -372,6 +386,7 @@ function FeatureTag({
   text,
   color,
   softColor,
+  side,
   onClick,
 }: {
   x: number;
@@ -379,11 +394,13 @@ function FeatureTag({
   text: string;
   color: string;
   softColor: string;
+  /** Which side of the surface the pill sits on: always AWAY from the glass,
+   * so a tag never covers its own lite or the next surface's + target. */
+  side: "left" | "right";
   onClick?: () => void;
 }) {
   const width = text.length * 5.2 + 12;
-  const flip = x > VIEWBOX_WIDTH * 0.72;
-  const left = flip ? x - 6 - width : x + 6;
+  const left = side === "left" ? x - 6 - width : x + 6;
 
   return (
     <g
@@ -397,7 +414,11 @@ function FeatureTag({
           onClick();
         }
       }}
-      className={onClick ? "cursor-pointer transition-opacity hover:opacity-80" : undefined}
+      className={
+        onClick
+          ? "cursor-pointer outline-none transition-opacity hover:opacity-80 focus:outline-none"
+          : undefined
+      }
     >
       <rect
         x={left}
@@ -427,6 +448,7 @@ function SurfaceMarker({
   x,
   hasCoating,
   hasFrit,
+  yNudge,
   onFeatureClick,
   onAdd,
 }: {
@@ -434,11 +456,16 @@ function SurfaceMarker({
   x: number;
   hasCoating: boolean;
   hasFrit: boolean;
+  /** Vertical shift applied when this tag shares a cavity with a facing tag. */
+  yNudge: number;
   onFeatureClick?: (feature: DiagramFeature) => void;
   onAdd?: () => void;
 }) {
   const occupied = hasCoating || hasFrit;
   const mid = (GLASS_TOP + GLASS_BOTTOM) / 2;
+  // Odd surfaces are lite LEFT edges (glass to the right), even surfaces are
+  // lite RIGHT edges (glass to the left): the tag points the other way.
+  const tagSide: "left" | "right" = surface % 2 === 1 ? "left" : "right";
 
   return (
     <g>
@@ -447,10 +474,11 @@ function SurfaceMarker({
           <line x1={x} y1={GLASS_TOP} x2={x} y2={GLASS_BOTTOM} stroke="var(--accent)" strokeWidth={3} />
           <FeatureTag
             x={x}
-            y={featureTagY(0, hasFrit)}
+            y={featureTagY(0, hasFrit) + yNudge}
             text="coating"
             color="var(--accent)"
             softColor="var(--accent-soft)"
+            side={tagSide}
             onClick={onFeatureClick ? () => onFeatureClick("coating") : undefined}
           />
         </>
@@ -468,10 +496,11 @@ function SurfaceMarker({
           />
           <FeatureTag
             x={x}
-            y={featureTagY(hasCoating ? 1 : 0, hasCoating)}
+            y={featureTagY(hasCoating ? 1 : 0, hasCoating) + yNudge}
             text="frit"
             color="var(--warning)"
             softColor="var(--warning-soft)"
+            side={tagSide}
             onClick={onFeatureClick ? () => onFeatureClick("frit") : undefined}
           />
         </>
@@ -489,7 +518,7 @@ function SurfaceMarker({
               onAdd();
             }
           }}
-          className="cursor-pointer transition-opacity hover:opacity-70"
+          className="cursor-pointer outline-none transition-opacity hover:opacity-70 focus:outline-none"
         >
           <circle
             cx={x}
