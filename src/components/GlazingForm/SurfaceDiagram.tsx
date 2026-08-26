@@ -1,6 +1,12 @@
 "use client";
 
-import type { GapInput, LiteInput, SurfaceNumber } from "@/engine";
+import {
+  SUBSTRATE_INTERNAL_T_6MM,
+  linearRGBToHex,
+  type GapInput,
+  type LiteInput,
+  type SurfaceNumber,
+} from "@/engine";
 
 /**
  * Cross-section through the glazing, exterior on the left.
@@ -89,6 +95,16 @@ function layout(
 
 export type DiagramFeature = "coating" | "frit";
 
+/**
+ * Panes are filled with their substrate's own transmitted color, so a green
+ * or bronze lite reads as such at a glance and a mixed build-up is visibly
+ * mixed. Drawn at half opacity over the panel surface so it works on both
+ * themes.
+ */
+function substrateHex(lite: LiteInput): string {
+  return linearRGBToHex(SUBSTRATE_INTERNAL_T_6MM[lite.substrate]);
+}
+
 export function SurfaceDiagram({
   lites,
   gaps,
@@ -116,12 +132,19 @@ export function SurfaceDiagram({
         role="img"
         aria-label={`Cross-section of ${lites.length}-lite glazing, exterior at left`}
       >
-        <text x={PADDING} y={16} className="fill-[var(--muted)] text-[9px]" textAnchor="start">
+        {/* Side labels sit at mid-height, hard against the edges — at the top
+            they collided with a triple's surface markers. */}
+        <text
+          x={6}
+          y={(GLASS_TOP + GLASS_BOTTOM) / 2 + 3}
+          className="fill-[var(--muted)] text-[9px]"
+          textAnchor="start"
+        >
           EXTERIOR
         </text>
         <text
-          x={VIEWBOX_WIDTH - PADDING}
-          y={16}
+          x={VIEWBOX_WIDTH - 6}
+          y={(GLASS_TOP + GLASS_BOTTOM) / 2 + 3}
           className="fill-[var(--muted)] text-[9px]"
           textAnchor="end"
         >
@@ -138,8 +161,8 @@ export function SurfaceDiagram({
                 y={GLASS_TOP}
                 width={width}
                 height={GLASS_BOTTOM - GLASS_TOP}
-                fill="var(--accent)"
-                fillOpacity={0.1}
+                fill={substrateHex(lite)}
+                fillOpacity={0.5}
                 stroke="var(--border-strong)"
                 strokeWidth={1}
                 rx={1}
@@ -232,15 +255,15 @@ export function MiniSection({
 
   return (
     <svg viewBox={`0 0 ${width} 36`} className="h-9 w-auto shrink-0" aria-hidden>
-      {panes.map(({ x, width: w }, i) => (
+      {panes.map(({ x, width: w, lite }, i) => (
         <rect
           key={i}
           x={x}
           y={3}
           width={w}
           height={30}
-          fill="var(--accent)"
-          fillOpacity={0.1}
+          fill={substrateHex(lite)}
+          fillOpacity={0.5}
           stroke="var(--border-strong)"
           strokeWidth={1}
         />

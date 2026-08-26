@@ -30,7 +30,7 @@ export function AssemblySection() {
     <Section
       id="card-cutsheet"
       title="Cutsheet values"
-      description="The three visible-light values from the performance table. Everything else is derived from these."
+      description="The three visible-light values from the performance table. Behind the scenes, the tool fits each lite's material properties so the rendered assembly reproduces these numbers — the verdict beside the diagram tracks how closely."
     >
       {/* Typed values are never rewritten — an impossible pair gets flagged
           below instead of being silently corrected. */}
@@ -70,11 +70,32 @@ export function AssemblySection() {
             title="Absorbed"
           />
         </div>
-        <p className={`mt-1.5 text-xs ${over ? "text-danger" : "text-muted"}`}>
-          {over
-            ? "Transmitted plus reflected light exceeds 100%. Check which columns these came from."
-            : `${(transmitted * 100).toFixed(0)}% passes through, ${(reflected * 100).toFixed(0)}% reflects back out, and the remaining ${(absorbed * 100).toFixed(0)}% is absorbed in the glass. Absorption is never entered: cutsheets don't print it, because it is exactly what the other two leave over.`}
-        </p>
+        {over ? (
+          <p className="mt-1.5 text-xs text-danger">
+            Transmitted plus reflected light exceeds 100%. Check which columns these came from.
+          </p>
+        ) : (
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-0.5 text-xs text-muted">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-sm bg-accent" aria-hidden />
+              {(transmitted * 100).toFixed(0)}% passes through
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-sm bg-accent/45" aria-hidden />
+              {(reflected * 100).toFixed(0)}% reflects back out
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-sm bg-border-strong/60" aria-hidden />
+              {(absorbed * 100).toFixed(0)}% absorbed in the glass
+            </span>
+          </div>
+        )}
+        {!over ? (
+          <p className="mt-1 text-xs text-muted/80">
+            Absorption is never entered: cutsheets don&apos;t print it, because it is exactly what
+            the other two leave over.
+          </p>
+        ) : null}
       </div>
     </Section>
   );

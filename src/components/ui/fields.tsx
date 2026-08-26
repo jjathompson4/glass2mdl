@@ -271,7 +271,7 @@ export function Section({
   action?: ReactNode;
 }) {
   return (
-    <section id={id} className="scroll-mt-24 rounded-lg border border-border-subtle bg-surface p-4">
+    <section id={id} className="scroll-mt-32 rounded-lg border border-border-subtle bg-surface p-4">
       <header className="mb-3 flex items-start justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold text-foreground">{title}</h2>

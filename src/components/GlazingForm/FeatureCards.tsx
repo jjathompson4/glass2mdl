@@ -182,7 +182,7 @@ function FeatureCardShell({
   children: ReactNode;
 }) {
   return (
-    <section id={id} className={`scroll-mt-24 rounded-lg border bg-surface p-4 ${borderClass}`}>
+    <section id={id} className={`scroll-mt-32 rounded-lg border bg-surface p-4 ${borderClass}`}>
       <header className="mb-3 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <span className={`h-3 w-3 rounded-sm ${squareClass}`} aria-hidden />
@@ -216,7 +216,7 @@ function AddCard({
   return (
     <section
       id={id}
-      className="scroll-mt-24 rounded-lg border border-dashed border-border-strong/60 p-4"
+      className="scroll-mt-32 rounded-lg border border-dashed border-border-strong/60 p-4"
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">

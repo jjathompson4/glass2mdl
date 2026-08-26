@@ -29,15 +29,20 @@ export function DiagramPanel({ derived }: { derived: DerivedOptics | null }) {
   const setFrit = useAppStore((s) => s.setFrit);
 
   const [condensed, setCondensed] = useState(false);
+  const [barTop, setBarTop] = useState(0);
   const [pendingAdd, setPendingAdd] = useState<SurfaceNumber | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
-  // The bar takes over once the full panel's strip has left the viewport.
+  // The bar takes over once the full panel's strip has slid under the sticky
+  // site header, and pins itself directly beneath that header.
   useEffect(() => {
     const onScroll = () => {
       const panel = panelRef.current;
       if (!panel) return;
-      setCondensed(panel.getBoundingClientRect().bottom < 8);
+      const headerBottom =
+        document.getElementById("site-header")?.getBoundingClientRect().bottom ?? 0;
+      setBarTop(Math.max(0, headerBottom));
+      setCondensed(panel.getBoundingClientRect().bottom < headerBottom + 8);
     };
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", onScroll);
@@ -135,7 +140,10 @@ export function DiagramPanel({ derived }: { derived: DerivedOptics | null }) {
       </div>
 
       {condensed ? (
-        <div className="fixed inset-x-0 top-0 z-30 border-b border-border-subtle bg-surface shadow-[0_2px_6px_rgba(0,0,0,0.12)]">
+        <div
+          className="fixed inset-x-0 z-30 border-b border-border-subtle bg-surface shadow-[0_2px_6px_rgba(0,0,0,0.12)]"
+          style={{ top: barTop }}
+        >
           <div className="mx-auto max-w-[820px] px-5 py-2">
             <CondensedBar verdict={verdict} onJump={jumpToFeature} />
           </div>

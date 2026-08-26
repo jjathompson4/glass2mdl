@@ -5,7 +5,7 @@ import { MDL_VERSION } from "@/engine";
 export default function Home() {
   return (
     <div className="min-h-screen">
-      <header className="border-b border-border-subtle bg-surface">
+      <header id="site-header" className="sticky top-0 z-40 border-b border-border-subtle bg-surface">
         <div className="mx-auto flex max-w-6xl items-baseline justify-between gap-4 px-5 py-4">
           <div>
             <h1 className="text-base font-semibold tracking-tight">glass2mdl</h1>

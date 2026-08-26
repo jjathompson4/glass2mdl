@@ -10,7 +10,7 @@ import {
   type ExportMode,
 } from "@/engine";
 import { useAppStore } from "@/lib/store";
-import { SegmentedControl, TextInput } from "@/components/ui/fields";
+import { TextInput } from "@/components/ui/fields";
 import { AssemblySection } from "./AssemblySection";
 import { ConstructionSection } from "./ConstructionSection";
 import { DiagramPanel } from "./DiagramPanel";
@@ -24,6 +24,36 @@ import { ValidationBanner } from "./ValidationBanner";
  * feature, the cutsheet numbers, then the download. The panel's tags and the
  * cards point at each other, so the drawing is the map of the whole form.
  */
+
+const MODES: { value: ExportMode; label: string; blurb: string }[] = [
+  {
+    value: "planar",
+    label: "Planar geometry",
+    blurb: "Each opening is a single plane with no thickness. One material for the whole assembly.",
+  },
+  {
+    value: "volumetric",
+    label: "Solid lites geometry",
+    blurb: "Each lite is a real solid with its own material; reflections stack the way real IGUs do.",
+  },
+];
+
+/** Small pictogram: one surface versus stacked solids. */
+function ModeGlyph({ mode, active }: { mode: ExportMode; active: boolean }) {
+  const stroke = active ? "var(--accent)" : "var(--border-strong)";
+  return (
+    <svg viewBox="0 0 34 20" className="h-5 w-8 shrink-0" aria-hidden>
+      {mode === "planar" ? (
+        <line x1={17} y1={2} x2={17} y2={18} stroke={stroke} strokeWidth={2.5} />
+      ) : (
+        <>
+          <rect x={8} y={2} width={5} height={16} fill={stroke} fillOpacity={0.25} stroke={stroke} strokeWidth={1.5} />
+          <rect x={21} y={2} width={5} height={16} fill={stroke} fillOpacity={0.25} stroke={stroke} strokeWidth={1.5} />
+        </>
+      )}
+    </svg>
+  );
+}
 export function GlazingForm() {
   const system = useAppStore((s) => s.system);
   const mode = useAppStore((s) => s.mode);
@@ -53,7 +83,7 @@ export function GlazingForm() {
   return (
     <div>
       <div className="mx-auto flex max-w-[820px] flex-wrap items-center gap-3 px-5 pb-3 pt-5">
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 basis-64">
           <TextInput
             value={system.name}
             onChange={setName}
@@ -61,25 +91,35 @@ export function GlazingForm() {
             ariaLabel="Product name"
           />
         </div>
-        <SegmentedControl<ExportMode>
-          ariaLabel="How the glazing is modeled in 3ds Max"
-          value={mode}
-          onChange={setMode}
-          options={[
-            {
-              value: "planar",
-              label: "Flat planes",
-              title:
-                "Each opening is a single plane with no thickness. One material for the whole assembly.",
-            },
-            {
-              value: "volumetric",
-              label: "Solid lites",
-              title:
-                "Each lite is a real solid with its own material; reflections stack the way real IGUs do.",
-            },
-          ]}
-        />
+        {/* The geometry choice decides everything the tool generates, so it
+            gets card-sized buttons rather than a quiet toggle. */}
+        <div
+          role="radiogroup"
+          aria-label="How the glazing is modeled in 3ds Max"
+          className="flex gap-2"
+        >
+          {MODES.map((option) => {
+            const selected = mode === option.value;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                title={option.blurb}
+                onClick={() => setMode(option.value)}
+                className={`flex items-center gap-2.5 rounded-md border px-4 py-2.5 text-[13px] font-semibold transition ${
+                  selected
+                    ? "border-accent bg-accent-soft text-accent"
+                    : "border-border-subtle text-muted hover:border-border-strong hover:text-foreground"
+                }`}
+              >
+                <ModeGlyph mode={option.value} active={selected} />
+                {option.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <DiagramPanel derived={solved?.derived ?? null} />

@@ -114,7 +114,7 @@ export function ConstructionSection() {
               </span>
             </span>
             <span className="text-[11px] text-muted/80">
-              looking through · reflection, outside · reflection, inside
+              whole assembly: looking through · reflection, outside · reflection, inside
             </span>
           </div>
           <div className="flex shrink-0 items-center gap-2">
