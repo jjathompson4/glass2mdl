@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   SUBSTRATE_LABELS,
   type DerivedOptics,
@@ -14,8 +14,14 @@ import { MiniSection, SurfaceDiagram, type DiagramFeature } from "./SurfaceDiagr
  * The cross-section stays on screen while the cards scroll, so the drawing is
  * both the map and the dashboard: feature tags jump to their cards, bare
  * surfaces grow a + to add one, and the three numbers plus the fit verdict
- * are always in view. Scrolled past, the panel condenses to a one-line bar
- * carrying the same information.
+ * are always in view. Scrolled past, a one-line bar carrying the same
+ * information takes over.
+ *
+ * The full panel sits in normal flow and the bar is a fixed overlay — an
+ * overlay never changes the document's height, so appearing and disappearing
+ * can't move the scroll position. (An earlier sticky panel that swapped
+ * between the two heights fought the browser's scroll anchoring and made
+ * scrolling snap back.)
  */
 export function DiagramPanel({ derived }: { derived: DerivedOptics | null }) {
   const system = useAppStore((s) => s.system);
@@ -24,25 +30,22 @@ export function DiagramPanel({ derived }: { derived: DerivedOptics | null }) {
 
   const [condensed, setCondensed] = useState(false);
   const [pendingAdd, setPendingAdd] = useState<SurfaceNumber | null>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
 
-  // Condensing shrinks the panel, which shortens the page — a single threshold
-  // would let the scroll position clamp back across it and bounce the panel
-  // open again. The wide gap between the two thresholds absorbs that shift.
+  // The bar takes over once the full panel's strip has left the viewport.
   useEffect(() => {
-    let isCondensed = false;
     const onScroll = () => {
-      const y = window.scrollY;
-      if (!isCondensed && y > 180) {
-        isCondensed = true;
-        setCondensed(true);
-      } else if (isCondensed && y < 8) {
-        isCondensed = false;
-        setCondensed(false);
-      }
+      const panel = panelRef.current;
+      if (!panel) return;
+      setCondensed(panel.getBoundingClientRect().bottom < 8);
     };
     window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
     onScroll();
-    return () => window.removeEventListener("scroll", onScroll);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+    };
   }, []);
 
   const coating = system.lites.find((l) => l.coating)?.coating;
@@ -52,13 +55,7 @@ export function DiagramPanel({ derived }: { derived: DerivedOptics | null }) {
   const verdict = derived ? fitVerdict(derived, system.assembly) : null;
 
   const scrollToCard = (id: string) => {
-    // Jumping condenses the panel, which shifts everything up — so land
-    // instantly first, then re-measure against the settled layout and glide
-    // the remainder.
-    document.getElementById(id)?.scrollIntoView({ block: "start" });
-    requestAnimationFrame(() => {
-      document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   const jumpToFeature = (feature: DiagramFeature) => {
@@ -86,20 +83,16 @@ export function DiagramPanel({ derived }: { derived: DerivedOptics | null }) {
 
   return (
     <>
-      <div className="sticky top-0 z-20 border-b border-border-subtle bg-surface shadow-[0_2px_6px_rgba(0,0,0,0.06)]">
+      <div ref={panelRef} className="border-b border-border-subtle bg-surface">
         <div className="mx-auto max-w-[820px] px-5 py-2.5">
-          {condensed ? (
-            <CondensedBar verdict={verdict} onJump={jumpToFeature} />
-          ) : (
-            <>
-              <SurfaceDiagram
-                lites={system.lites}
-                gaps={system.gaps}
-                coatingSurface={coating?.surface}
-                fritSurface={frit?.surface}
-                onFeatureClick={jumpToFeature}
-                onAddAt={canAddCoating || canAddFrit ? handleAddAt : undefined}
-              />
+          <SurfaceDiagram
+            lites={system.lites}
+            gaps={system.gaps}
+            coatingSurface={coating?.surface}
+            fritSurface={frit?.surface}
+            onFeatureClick={jumpToFeature}
+            onAddAt={canAddCoating || canAddFrit ? handleAddAt : undefined}
+          />
 
               {pendingAdd !== null ? (
                 <div className="mt-1.5 flex flex-wrap items-center gap-2 rounded-md border border-accent/40 bg-accent-soft px-3 py-2 text-xs">
@@ -134,14 +127,20 @@ export function DiagramPanel({ derived }: { derived: DerivedOptics | null }) {
                 </div>
               ) : null}
 
-              <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-border-subtle pt-2">
-                <NumberStrip />
-                <VerdictChip verdict={verdict} />
-              </div>
-            </>
-          )}
+          <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-border-subtle pt-2">
+            <NumberStrip />
+            <VerdictChip verdict={verdict} />
+          </div>
         </div>
       </div>
+
+      {condensed ? (
+        <div className="fixed inset-x-0 top-0 z-30 border-b border-border-subtle bg-surface shadow-[0_2px_6px_rgba(0,0,0,0.12)]">
+          <div className="mx-auto max-w-[820px] px-5 py-2">
+            <CondensedBar verdict={verdict} onJump={jumpToFeature} />
+          </div>
+        </div>
+      ) : null}
     </>
   );
 }
