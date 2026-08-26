@@ -123,15 +123,21 @@ so frit stays UV-based and coverage % is the spec.
    planar mode already reproduces such assemblies exactly.
 8. **Workstation follow-ups** — the Iray+ API discovery and the apply-workflow
    validation are **done** (2026-08-25); the per-lite stacked render is **done**.
+   **END-TO-END PIPELINE VALIDATED on a real scene (2026-08-26)**: Jeff took a
+   V5227 export from the tool through the apply GUI — 25 candidates found
+   (mixed classes, 3 auto-collapsed), 18 lites tagged into 9 IGUs, QA colors
+   correct, bound via the manifest, and the glass renders correctly in Iray.
+   The field test surfaced and fixed: Max's shared script namespace shadows
+   the `max` builtin with a module (builtins aliased now); an unresolved
+   MDL module binds pink (now refused with a placement message + probe on
+   manifest load); and three GUI rounds (window on run, selection-first,
+   type controls hidden for single-type manifests).
    Remaining: mirror rig for **absolute** Rf/Rb; check whether `anno::`
-   annotations display; push the current Iray-Mapper to GitHub; validate
-   `find_glazing()`/`assign_type()` on a real model; and **render an actual
-   glass2mdl coated-volumetric export** (e.g. V5227 entered through the tool)
-   against the 442.7 lux reference — the hand-authored template validated the
-   structure, but the emitter's exact-interreflection fit produces slightly
-   different numbers than the workstation shortcut and deserves its own
-   measurement. Evidence lives in the byo_mdl repo under
-   `results/evidence/transmission/2026-08-25_*`.
+   annotations display; push the current Iray-Mapper to GitHub; and a
+   **measured** lux comparison of a glass2mdl coated-volumetric export
+   against the 442.7 lux reference — the render looks right; the emitter's
+   exact-interreflection fit still deserves its own measurement. Evidence
+   lives in the byo_mdl repo under `results/evidence/transmission/2026-08-25_*`.
 
 ---
 
