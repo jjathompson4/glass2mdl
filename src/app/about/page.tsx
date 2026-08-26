@@ -27,12 +27,11 @@ export default function About() {
 
         <div className="mt-5 space-y-5 text-sm leading-relaxed text-foreground">
           <p>
-            glass2mdl turns the numbers on a glazing manufacturer&apos;s cutsheet into MDL
-            materials for Iray in 3ds Max. The output is rigorously tested against measured
-            renders. Glass made with this tool transmits, reflects, and absorbs exactly the
-            light the cutsheet says it should, and it looks physically correct from both
-            sides. Coated products keep their asymmetric reflections. The fit check shows you
-            the proof before you download.
+            glass2mdl turns the numbers on a glazing manufacturer&apos;s datasheet into MDL
+            materials for Iray in 3ds Max. Glazing materials created with this tool transmit,
+            reflect, and absorb exactly the amount of light that the datasheet describes, and
+            it looks physically correct from both sides. Coated products keep their asymmetric
+            reflections. The fit check shows you the proof before you download.
           </p>
           <p>
             You describe the build-up the way the cutsheet does (lites, thicknesses, substrates,
