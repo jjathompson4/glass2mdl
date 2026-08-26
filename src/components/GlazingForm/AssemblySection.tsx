@@ -2,12 +2,12 @@
 
 import type { Fraction } from "@/engine";
 import { useAppStore } from "@/lib/store";
-import { PercentField, Section, StepTitle } from "@/components/ui/fields";
+import { Field, PercentInput, Section } from "@/components/ui/fields";
 
 /**
- * The three numbers every cutsheet reports. Colour and the observer setting
- * live in step 4's Glass colour panel — they only matter in the rare case
- * where colour data was published.
+ * The three numbers every cutsheet reports, typed straight in. Color and the
+ * observer setting live in Construction's Glass color panel — they only
+ * matter in the rare case where color data was published.
  *
  * An energy bar sits underneath because transmitted plus reflected light
  * cannot exceed what arrived, and watching that budget fill catches a
@@ -28,31 +28,28 @@ export function AssemblySection() {
 
   return (
     <Section
-      title={<StepTitle n={3}>Cutsheet numbers</StepTitle>}
+      id="card-cutsheet"
+      title="Cutsheet values"
       description="The three visible-light values from the performance table. Everything else is derived from these."
     >
-      {/* Slider ranges cap at what energy conservation allows (T + R ≤ 100%),
-          so dragging can't produce impossible glass. Typed values are never
-          rewritten — a mistyped pair gets flagged below instead. */}
+      {/* Typed values are never rewritten — an impossible pair gets flagged
+          below instead of being silently corrected. */}
       <div className="grid gap-4 md:grid-cols-3">
-        <PercentField
-          label="Transmittance (VLT)"
-          value={assembly.tvis}
-          max={Math.max(0, (1 - reflected) * 100)}
-          onChange={(tvis) => set({ tvis: tvis as Fraction })}
-        />
-        <PercentField
-          label="Reflectance, exterior"
-          value={assembly.rvisExt}
-          max={Math.max(0, (1 - transmitted) * 100)}
-          onChange={(rvisExt) => set({ rvisExt: rvisExt as Fraction })}
-        />
-        <PercentField
-          label="Reflectance, interior"
-          value={assembly.rvisInt}
-          max={Math.max(0, (1 - transmitted) * 100)}
-          onChange={(rvisInt) => set({ rvisInt: rvisInt as Fraction })}
-        />
+        <Field label="Transmittance (VLT)">
+          <PercentInput value={assembly.tvis} onChange={(tvis) => set({ tvis: tvis as Fraction })} />
+        </Field>
+        <Field label="Reflectance, exterior">
+          <PercentInput
+            value={assembly.rvisExt}
+            onChange={(rvisExt) => set({ rvisExt: rvisExt as Fraction })}
+          />
+        </Field>
+        <Field label="Reflectance, interior">
+          <PercentInput
+            value={assembly.rvisInt}
+            onChange={(rvisInt) => set({ rvisInt: rvisInt as Fraction })}
+          />
+        </Field>
       </div>
 
       <div className="mt-4">

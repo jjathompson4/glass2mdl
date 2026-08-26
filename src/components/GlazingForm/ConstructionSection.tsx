@@ -1,30 +1,17 @@
 "use client";
 
+import { useState } from "react";
 import {
   SUBSTRATE_LABELS,
-  type CoatingKind,
+  gray,
+  nominalAssemblyHue,
+  resolveColorSpec,
   type SubstrateTint,
-  type SurfaceNumber,
 } from "@/engine";
 import { SUBSTRATE_ORDER, useAppStore } from "@/lib/store";
-import { surfaceOptions } from "@/lib/surfaces";
 import { fromDisplay, toDisplay, unitLabel, unitStep } from "@/lib/units";
-import {
-  Field,
-  NumberInput,
-  SegmentedControl,
-  Select,
-  Section,
-  StepTitle,
-  Toggle,
-} from "@/components/ui/fields";
-import { SurfaceDiagram } from "./SurfaceDiagram";
-
-const COATING_KINDS: { value: CoatingKind; label: string }[] = [
-  { value: "low-e", label: "Low-e" },
-  { value: "reflective", label: "Reflective" },
-  { value: "other", label: "Other" },
-];
+import { Field, NumberInput, SegmentedControl, Select, Section } from "@/components/ui/fields";
+import { GlassColorPanel, Swatch } from "./GlassColorPanel";
 
 export function ConstructionSection() {
   // Separate selectors, not one object selector: a fresh object every render
@@ -34,16 +21,20 @@ export function ConstructionSection() {
   const setLiteCount = useAppStore((s) => s.setLiteCount);
   const updateLite = useAppStore((s) => s.updateLite);
   const setGapWidth = useAppStore((s) => s.setGapWidth);
-  const setCoating = useAppStore((s) => s.setCoating);
-  const moveCoatingToSurface = useAppStore((s) => s.moveCoatingToSurface);
+  const [colorOpen, setColorOpen] = useState(false);
 
-  const coatedIndex = system.lites.findIndex((l) => l.coating);
-  const coating = coatedIndex >= 0 ? system.lites[coatedIndex].coating : undefined;
+  const coating = system.lites.find((l) => l.coating)?.coating;
+  const coatingHue = coating?.reflectedColor ?? gray(1);
+  const adjustedCount = [
+    system.assembly.transmittedColor,
+    system.assembly.reflectedColorExt,
+    system.assembly.reflectedColorInt,
+  ].filter((spec) => spec && spec.kind !== "auto").length;
 
   return (
     <Section
-      title={<StepTitle n={2}>Construction</StepTitle>}
-      description="The build-up from the cutsheet header: lites, gaps, and where the coating sits."
+      title="Construction"
+      description="The build-up from the cutsheet header: lites and the gaps between them."
       action={
         <SegmentedControl
           ariaLabel="Number of lites"
@@ -57,14 +48,7 @@ export function ConstructionSection() {
         />
       }
     >
-      <SurfaceDiagram
-        lites={system.lites}
-        gaps={system.gaps}
-        coatingSurface={coating?.surface}
-        fritSurface={system.frit?.surface}
-      />
-
-      <div className="mt-3 space-y-2">
+      <div className="space-y-2">
         {system.lites.map((lite, index) => (
           <div key={index} className="rounded-md border border-border-subtle p-3">
             <div className="grid grid-cols-[auto_1fr_1fr] items-end gap-3">
@@ -109,54 +93,49 @@ export function ConstructionSection() {
         ))}
       </div>
 
-      <div className="mt-4 rounded-md border border-border-subtle p-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <Toggle
-            checked={Boolean(coating)}
-            label="Coated"
-            onChange={(checked) => {
-              if (checked) moveCoatingToSurface(system.lites.length > 1 ? 2 : 1);
-              else setCoating(Math.max(0, coatedIndex), undefined);
-            }}
-          />
-
-          {coating ? (
-            <div className="flex items-center gap-2">
-              <div className="w-36">
-                <Select<CoatingKind>
-                  value={coating.kind}
-                  onChange={(kind) => updateLite(coatedIndex, { coating: { ...coating, kind } })}
-                  options={COATING_KINDS}
+      {/* The color lives with the construction because the substrate choice is
+          what produces it; the swatches show what the current build-up gives. */}
+      <div className="mt-3 border-t border-border-subtle pt-3">
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
+          <div className="flex min-w-0 flex-wrap items-center gap-2.5">
+            <span className="text-xs font-medium text-muted">Glass color</span>
+            <span className="flex items-center">
+              <span className="rounded-full border-2 border-surface">
+                <Swatch
+                  color={resolveColorSpec(system.assembly.transmittedColor, nominalAssemblyHue(system.lites))}
+                  size="h-5 w-5"
                 />
-              </div>
-              <span className="text-xs text-muted">on surface</span>
-              <div className="w-60">
-                <Select
-                  value={String(coating.surface)}
-                  onChange={(value) => moveCoatingToSurface(Number(value) as SurfaceNumber)}
-                  options={surfaceOptions(system.lites.length).map((o) => ({
-                    value: String(o.value),
-                    label: o.label,
-                  }))}
-                />
-              </div>
-            </div>
-          ) : null}
+              </span>
+              <span className="-ml-1.5 rounded-full border-2 border-surface">
+                <Swatch color={resolveColorSpec(system.assembly.reflectedColorExt, coatingHue)} size="h-5 w-5" />
+              </span>
+              <span className="-ml-1.5 rounded-full border-2 border-surface">
+                <Swatch color={resolveColorSpec(system.assembly.reflectedColorInt, coatingHue)} size="h-5 w-5" />
+              </span>
+            </span>
+            <span className="text-[11px] text-muted/80">
+              looking through · reflection, outside · reflection, inside
+            </span>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            {adjustedCount ? (
+              <span className="text-[11px] text-muted/80">{adjustedCount} adjusted</span>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => setColorOpen(!colorOpen)}
+              className="text-xs font-medium text-accent transition hover:opacity-80"
+            >
+              {colorOpen ? "Done" : "Adjust…"}
+            </button>
+          </div>
         </div>
 
-        {coating ? (
-          <p className="mt-2 text-xs leading-snug text-muted">
-            Says where the reflection asymmetry lives. Pick the surface from the cutsheet; low-e is
-            usually #2, and the diagram above highlights it. Its optical values are worked out for
-            you (see Fine-tuning in step 4). Only one coating is fitted at a time, since the three
-            measured numbers can only pin down one coating&apos;s unknowns. A product with a second
-            coating still exports correctly: the numbers describe the finished assembly either way.
-          </p>
-        ) : (
-          <p className="mt-2 text-xs text-muted">
-            Most performance glazing is coated. Leave this off only for plain tinted or clear glass.
-          </p>
-        )}
+        {colorOpen ? (
+          <div className="mt-3">
+            <GlassColorPanel />
+          </div>
+        ) : null}
       </div>
     </Section>
   );

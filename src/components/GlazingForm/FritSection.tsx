@@ -10,7 +10,7 @@ import {
   type FritPattern,
   type SurfaceNumber,
 } from "@/engine";
-import { defaultFrit, useAppStore } from "@/lib/store";
+import { useAppStore } from "@/lib/store";
 import { readTextureFile } from "@/lib/textureUpload";
 import { surfaceOptions } from "@/lib/surfaces";
 import { fromDisplay, toDisplay, unitLabel, unitStep } from "@/lib/units";
@@ -21,17 +21,16 @@ import {
   PercentInput,
   SegmentedControl,
   Select,
-  Toggle,
 } from "@/components/ui/fields";
 
 type PatternKind = FritPattern["kind"];
 
-export function FritPanel() {
+/** The frit card's body. On/off lives with the card's Add and Remove. */
+export function FritControls() {
   const frit = useAppStore((s) => s.system.frit);
   const lites = useAppStore((s) => s.system.lites);
   const unit = useAppStore((s) => s.unit);
   const uploadedMask = useAppStore((s) => s.uploadedMask);
-  const setFrit = useAppStore((s) => s.setFrit);
   const updateFrit = useAppStore((s) => s.updateFrit);
   const setFritPattern = useAppStore((s) => s.setFritPattern);
   const setUploadedMask = useAppStore((s) => s.setUploadedMask);
@@ -88,22 +87,10 @@ export function FritPanel() {
     }
   };
 
+  if (!frit) return null;
+
   return (
     <div className="space-y-3">
-      <Toggle
-        checked={Boolean(frit)}
-        label="Fritted"
-        onChange={(checked) =>
-          setFrit(checked ? defaultFrit(lites.length > 1 ? 2 : 1, { r: 0.9, g: 0.9, b: 0.88 }) : undefined)
-        }
-      />
-      {!frit ? (
-        <p className="text-xs text-muted">
-          Off. Turn on for dotted, lined, or custom-patterned glass. It appears on the step-2
-          diagram the moment it&apos;s on.
-        </p>
-      ) : (
-        <div className="space-y-3">
           <SegmentedControl<PatternKind>
             ariaLabel="Frit pattern"
             value={pendingTexture ? "texture" : frit.pattern.kind}
@@ -278,7 +265,7 @@ export function FritPanel() {
           </div>
 
           <div className="max-w-sm">
-            <Field label="Surface" hint="It shows up on the step-2 diagram, labeled in amber.">
+            <Field label="Surface" hint="Tagged in amber on the diagram above.">
               <Select
                 value={String(frit.surface)}
                 onChange={(value) => updateFrit({ surface: Number(value) as SurfaceNumber })}
@@ -293,8 +280,6 @@ export function FritPanel() {
           <p className="text-xs text-muted">
             Covers {(coverage * 100).toFixed(0)}% of the glass.
           </p>
-        </div>
-      )}
     </div>
   );
 }

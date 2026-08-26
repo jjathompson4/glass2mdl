@@ -20,7 +20,7 @@ import { NumberInput, SegmentedControl } from "@/components/ui/fields";
  * most cutsheets publish no colour data at all, and the substrate choice is
  * the working default.
  *
- * Brightness never comes from here. The percentages in step 3 own the level;
+ * Brightness never comes from here. The Cutsheet values percentages own the level;
  * a colour only supplies the hue, which is why an entered L* is cross-checked
  * against the matching percentage instead of being used.
  */
@@ -30,7 +30,7 @@ type ColorKey = "transmittedColor" | "reflectedColorExt" | "reflectedColorInt";
 interface Row {
   key: ColorKey;
   label: string;
-  /** Which step-3 percentage owns this quantity's brightness. */
+  /** Which cutsheet percentage owns this quantity's brightness. */
   metric: string;
 }
 
@@ -181,7 +181,7 @@ function ColorEditor({
           />
           <p className="text-[11px] leading-snug text-muted">
             Only the hue is used. How light or dark the glass is stays set by your {row.metric} in
-            step 3.
+            Cutsheet values.
           </p>
         </div>
       ) : null}
@@ -258,7 +258,7 @@ function TypedInputs({
           <LightnessCheck L={spec.L} level={level} metric={row.metric} />
           <p className="text-[11px] leading-snug text-muted/80">
             Only a* and b* (the hue) are used. Brightness comes from your {row.metric} in
-            step 3, so L* just gets cross-checked against it.
+            Cutsheet values, so L* just gets cross-checked against it.
           </p>
         </>
       ) : (
@@ -272,7 +272,7 @@ function TypedInputs({
             </Compact>
           </div>
           <p className="text-[11px] leading-snug text-muted/80">
-            Chromaticity carries the hue only; brightness stays set by your {row.metric} in step 3.
+            Chromaticity carries the hue only; brightness stays set by your {row.metric} in Cutsheet values.
           </p>
         </>
       )}
@@ -294,7 +294,7 @@ function LightnessCheck({ L, level, metric }: { L: number; level: number; metric
   ) : (
     <p className="text-[11px] text-warning">
       L* {L.toFixed(1)} ≈ {(implied * 100).toFixed(0)}%, but {(level * 100).toFixed(0)}% was entered
-      in step 3. Check both came from the same product row.
+      in Cutsheet values. Check both came from the same product row.
     </p>
   );
 }

@@ -48,7 +48,7 @@ function compose(hue: RGB, level: number): RGB {
  * Read-only until overridden: cutsheets describe the whole assembly, not the
  * coating itself, so normally there is nothing to do here. An override wins
  * over the fit; the remaining values absorb what they can, and any gap shows
- * up honestly in the step-5 fit check rather than the override quietly
+ * up honestly in the Download card's fit check rather than the override quietly
  * winning.
  */
 export function CoatingOverridesPanel({
@@ -74,7 +74,7 @@ export function CoatingOverridesPanel({
       <p className="rounded-md bg-surface-sunken px-2.5 py-2 text-xs leading-snug text-muted">
         Cutsheets describe the whole assembly, not the coating itself, so the tool works the
         coating&apos;s own optical values out from your three numbers. They are shown read-only here and
-        in step 5&apos;s details. Override one only when the manufacturer publishes it directly.
+        in the Download card&apos;s fit check. Override one only when the manufacturer publishes it directly.
       </p>
 
       <div className="space-y-1.5">
@@ -154,7 +154,7 @@ export function CoatingOverridesPanel({
 
       {coating.overrides ? (
         <p className="text-[11px] leading-snug text-muted">
-          An override is held exactly. If the fit check in step 5 grew a residual, the override
+          An override is held exactly. If the Download card&apos;s fit check grew a residual, the override
           disagrees with the measured performance.
         </p>
       ) : null}

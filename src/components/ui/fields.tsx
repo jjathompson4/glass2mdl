@@ -107,54 +107,16 @@ export function PercentInput({
   );
 }
 
-/**
- * Percent value with a slider and a numeric box driving the same state.
- *
- * Cutsheet values get typed exactly; the slider is for exploring how a change
- * moves the fit without retyping.
- */
-export function PercentField({
-  label,
-  value,
-  onChange,
-  hint,
-  max = 100,
-}: {
-  label: string;
-  value: number;
-  onChange: (fraction: number) => void;
-  hint?: string;
-  max?: number;
-}) {
-  return (
-    <div className="flex flex-col gap-1">
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="text-xs font-medium text-muted">{label}</span>
-      </div>
-      <PercentInput value={value} onChange={onChange} />
-      <input
-        type="range"
-        aria-label={label}
-        min={0}
-        max={max}
-        step={0.5}
-        value={Math.min(max, Math.max(0, value * 100))}
-        onChange={(event) => onChange(Number(event.target.value) / 100)}
-        className="mt-0.5 h-1 w-full cursor-pointer appearance-none rounded-full bg-border-subtle accent-[var(--accent)]"
-      />
-      {hint ? <span className="text-xs text-muted/80">{hint}</span> : null}
-    </div>
-  );
-}
-
 export function TextInput({
   value,
   onChange,
   placeholder,
+  ariaLabel,
 }: {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
+  ariaLabel?: string;
 }) {
   return (
     <input
@@ -162,6 +124,7 @@ export function TextInput({
       className={inputClass}
       value={value}
       placeholder={placeholder}
+      aria-label={ariaLabel}
       onChange={(event) => onChange(event.target.value)}
     />
   );
@@ -294,18 +257,21 @@ export function Toggle({
 }
 
 export function Section({
+  id,
   title,
   description,
   children,
   action,
 }: {
+  /** Anchor for the diagram panel's jump-to-card scrolling. */
+  id?: string;
   title: ReactNode;
   description?: string;
   children: ReactNode;
   action?: ReactNode;
 }) {
   return (
-    <section className="rounded-lg border border-border-subtle bg-surface p-4">
+    <section id={id} className="scroll-mt-24 rounded-lg border border-border-subtle bg-surface p-4">
       <header className="mb-3 flex items-start justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold text-foreground">{title}</h2>
@@ -315,17 +281,6 @@ export function Section({
       </header>
       {children}
     </section>
-  );
-}
-
-/** Numbered heading for the guided flow: "1 · What are you making?" */
-export function StepTitle({ n, children }: { n: number; children: ReactNode }) {
-  return (
-    <>
-      <span className="text-accent">{n}</span>
-      <span className="text-muted"> · </span>
-      {children}
-    </>
   );
 }
 
