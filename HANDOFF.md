@@ -251,6 +251,36 @@ Round 2 (same day, after Jeff's follow-up review):
   user-supplied published values pinning coating #2 so the fit stays solvable
   — is queued below as item 8.
 
+Round 3 (2026-08-25, commit `4086e4e`) — **diagram-first layout**, replacing
+the numbered five-step flow after Jeff asked to streamline further ("the
+coating card is different than the frit section, and the sliders are weird").
+Three directions were mocked on the canvas; Jeff picked Diagram-first with
+consistent card widths and the diagram staying visible while cards scroll:
+
+- **Pinned panel** (`DiagramPanel`): the to-scale cross-section, the three
+  cutsheet numbers, and the fit verdict stay on screen; scrolled past ~180px
+  it condenses to a one-line bar (mini section, name + build-up summary,
+  feature chips, numbers, verdict). Hysteresis (expand only near the top)
+  prevents condense/expand oscillation from the page-height change, and card
+  jumps land instantly then re-measure once the condensed layout settles.
+- **The diagram is the interface**: feature tags ("coating", "frit") are
+  pills that jump to their cards; bare surfaces show a dashed + that adds a
+  feature there (a chooser row appears only when both kinds are still
+  possible). Display-only rendering stays available by omitting the handlers.
+- **Identical feature cards** (`FeatureCards`): Coating and Frit share one
+  anatomy — colored square matching the diagram tag, type/pattern beside a
+  surface dropdown, Remove — and collapse to dashed "Add a coating"/"Add
+  frit" rows when absent. Coating's fitted values (Transmits/Reflects out/
+  Reflects in) sit in its card with Override… opening the overrides panel
+  inline.
+- **Glass color lives in Construction** as a swatch row (three swatches +
+  Adjust… opening the round-1 panel inline). **Sliders are gone** from
+  Cutsheet values — typed numbers with the energy bar as the visual check.
+- **One verdict, two places** (`fitVerdict.ts`): the panel chip and the
+  Download card's fit-check disclosure share the computation, so they can
+  never disagree. Steps are no longer numbered; TargetSection and
+  FineTuningSection were deleted (name + mode toggle moved to a header row).
+
 ## UI review findings (session 2)
 
 Both rounds of feedback caught things that "passed" automated verification.
