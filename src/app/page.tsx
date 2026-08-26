@@ -1,4 +1,6 @@
+import Link from "next/link";
 import { GlazingForm } from "@/components/GlazingForm/GlazingForm";
+import { SiteFooter } from "@/components/ui/SiteFooter";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { MDL_VERSION } from "@/engine";
 
@@ -14,6 +16,9 @@ export default function Home() {
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-3">
+            <Link href="/about" className="text-xs text-muted transition hover:text-foreground">
+              About
+            </Link>
             <span className="hidden font-mono text-[11px] text-muted sm:block">
               MDL {MDL_VERSION}
             </span>
@@ -26,12 +31,7 @@ export default function Home() {
         <GlazingForm />
       </main>
 
-      <footer className="border-t border-border-subtle px-5 py-5">
-        <p className="mx-auto max-w-6xl text-xs text-muted">
-          Reproduces visible-light appearance for rendering. Not a substitute for thermal or
-          daylight analysis.
-        </p>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }
