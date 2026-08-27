@@ -7,6 +7,7 @@ import type { SolverWarning } from "../types/issues";
 import type { DerivedOptics } from "../types/optics";
 import { buildDerived, coatingLayer, compensateForLayer, provenanceComments } from "./common";
 import { lowerFrit } from "./frit";
+import { applyRollerWave } from "./rollerWave";
 
 export interface SolveOutput {
   materials: MaterialIR[];
@@ -73,6 +74,14 @@ export function solvePlanar(input: GlazingSystemInput): SolveOutput {
     comments: [],
   };
 
+  const textures: { fileName: string; bytes: Uint8Array }[] = [];
+  if (input.rollerWave) {
+    textures.push(...applyRollerWave([material], input.rollerWave, prefix).textures);
+    notes.push(
+      "Roller wave assumes 1 UV unit = 1 meter (a 1 m x 1 m UVW Map, or Real-World Map Size).",
+    );
+  }
+
   // In planar mode the assembly is already collapsed to one surface, so there
   // is no surface for frit to sit on relative to anything else — it belongs in
   // the material, layered over the glazing.
@@ -88,9 +97,10 @@ export function solvePlanar(input: GlazingSystemInput): SolveOutput {
         ...backLayers,
       ],
     };
-    material.moduleFunctions = lowered.moduleFunctions;
+    material.moduleFunctions = [...material.moduleFunctions, ...lowered.moduleFunctions];
     if (lowered.moduleFunctions.length) {
       material.params = [
+        ...material.params,
         {
           name: "frit_pattern_scale",
           type: "float",
@@ -114,10 +124,15 @@ export function solvePlanar(input: GlazingSystemInput): SolveOutput {
       });
 
     const derived = buildDerived(input, fit);
-    material.comments = provenanceComments(input, "planar", fit, notes);
-    return { materials: [material], derived, warnings, textures: lowered.textures };
+    material.comments = [...provenanceComments(input, "planar", fit, notes), ...material.comments];
+    return {
+      materials: [material],
+      derived,
+      warnings,
+      textures: [...textures, ...lowered.textures],
+    };
   }
 
-  material.comments = provenanceComments(input, "planar", fit, notes);
-  return { materials: [material], derived: buildDerived(input, fit), warnings, textures: [] };
+  material.comments = [...provenanceComments(input, "planar", fit, notes), ...material.comments];
+  return { materials: [material], derived: buildDerived(input, fit), warnings, textures };
 }

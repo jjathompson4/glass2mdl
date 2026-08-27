@@ -18,6 +18,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { zipSync, strToU8 } from "fflate";
+import { rollerWaveNormalMap } from "../src/engine/mdl/emit/rollerWave";
 import { emitModule } from "../src/engine/mdl/emit/module";
 import { absorptionCoefficient } from "../src/engine/physics/slab";
 import { AIR_GLASS_R0, GLASS_IOR } from "../src/engine/physics/constants";
@@ -254,6 +255,63 @@ const ENTRIES: KitEntry[] = [
       }),
     ],
   },
+  {
+    slug: "09_roller_wave",
+    title: "Does the roller wave normal map ripple reflections at true scale?",
+    question:
+      "Copy roller_wave_normal.png (emitted next to this kit) beside the .mdl. Apply to a 1m x 1m plane AND to the closed box, both with a 1.0m x 1.0m UVW Map. View a bright reflection at a grazing angle.",
+    expected:
+      "Reflections ripple with roughly a 300mm period and the ripple visibly varies across the surface rather than repeating a uniform sine. Raising roller_wave_strength to 0.2 makes it obvious; 0 turns the surface optically flat. A flat surface at the default means normal maps in material_geometry do not work in this build.",
+    materials: [
+      material({
+        name: "test09_roller_wave",
+        displayName: "09 roller wave",
+        layers: [coating(0.15, WHITE), glassBase("transmit")],
+        normalMap: { textureFileName: "roller_wave_normal.png", uvwFunction: "test09_roller_uvw" },
+        params: [
+          {
+            name: "roller_wave_strength",
+            type: "float",
+            defaultValue: 0.03125,
+            displayName: "Roller wave strength",
+            description: "Default matches a typical 0.08mm wave; try 0.2 to exaggerate, 0 to disable.",
+          },
+          {
+            name: "roller_wave_scale",
+            type: "float",
+            defaultValue: 1,
+            displayName: "Roller wave scale",
+            description: "Leave at 1.0 for this test.",
+          },
+        ],
+        moduleFunctions: [
+          { kind: "roller-wave-uvw", name: "test09_roller_uvw", direction: "horizontal" },
+        ],
+        comments: ["Requires roller_wave_normal.png beside the module and a 1m x 1m UVW map."],
+      }),
+    ],
+  },
+  {
+    slug: "10_object_variation",
+    title: "Does state::object_id() give materials per-object identity?",
+    question:
+      "Apply this one material to four or more separate boxes and render.",
+    expected:
+      "Each box shows a DIFFERENT red coverage level. Identical levels on every box mean object_id is constant in this build, and per-object variation must keep coming from the apply script's UV offsets (the current approach) rather than from inside the material.",
+    materials: [
+      material({
+        name: "test10_object_variation",
+        displayName: "10 object id probe",
+        thinWalled: true,
+        layers: [
+          { kind: "frit", color: RED, opacity: 1, weight: { kind: "function", functionName: "test10_object_value" } },
+          glassBase("transmit"),
+        ],
+        moduleFunctions: [{ kind: "object-id-probe", name: "test10_object_value" }],
+        comments: ["Probe: red coverage is math::frac(object_id * phi)."],
+      }),
+    ],
+  },
 ];
 
 function buildProtocol(): string {
@@ -377,6 +435,8 @@ function main(): void {
   }
 
   files[`${folder}/PROTOCOL.txt`] = strToU8(buildProtocol());
+  // Test 09 samples this map; it ships in the kit like it ships in exports.
+  files[`${folder}/roller_wave_normal.png`] = rollerWaveNormalMap();
 
   mkdirSync(OUT_DIR, { recursive: true });
 

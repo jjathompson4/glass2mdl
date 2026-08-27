@@ -121,7 +121,22 @@ so frit stays UV-based and coverage % is the spec.
    three unknowns still close against the three measurements. Unlocks
    per-lite volumetric fidelity for products like the V5227 TGU (#2 + #4);
    planar mode already reproduces such assemblies exactly.
-8. **Workstation follow-ups** — the Iray+ API discovery and the apply-workflow
+8. **Roller wave (2026-08-27, awaiting one workstation render)** — every
+   export ships `roller_wave_normal.png` (deterministic 16-bit map, generated
+   client-side by `src/engine/mdl/emit/rollerWave.ts` + `package/png.ts`) and
+   wires it into `material_geometry.normal` via
+   `base::tangent_space_normal_texture`. On by default at Typical
+   (0.08mm/300mm); Off/Subtle/Typical/Strong in the Construction card.
+   Ridges bake horizontal (the installed norm; no direction control by
+   design). Variability: the map's waves are internally varied, and the apply
+   script's Assign step now adds a 1m box UVW Map plus a name-seeded UV
+   offset per lite so no two IGUs ripple identically. `roller_wave_strength`
+   (0 disables) and `roller_wave_scale` are field-tunable and flow through
+   the bind manifest. Validation kit gained 09_roller_wave and the
+   10_object_variation state::object_id probe — RENDER 09 ON THE WORKSTATION
+   before deploying this to production.
+
+9. **Workstation follow-ups** — the Iray+ API discovery and the apply-workflow
    validation are **done** (2026-08-25); the per-lite stacked render is **done**.
    **END-TO-END PIPELINE VALIDATED on a real scene (2026-08-26)**: Jeff took a
    V5227 export from the tool through the apply GUI — 25 candidates found

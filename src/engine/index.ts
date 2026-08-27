@@ -22,6 +22,7 @@ export type {
   CoatingKind,
   ExportMode,
   FritInput,
+  RollerWaveInput,
   FritPattern,
   GapInput,
   GlazingSystemInput,

@@ -13,6 +13,7 @@ import {
   type GlazingSystemInput,
   type LiteInput,
   type RGB,
+  type RollerWaveInput,
   type SubstrateTint,
   type SurfaceNumber,
 } from "@/engine";
@@ -67,6 +68,9 @@ const defaultSystem = (): GlazingSystemInput => {
       rvisExt: fraction(0.08),
       rvisInt: fraction(0.08),
     }),
+    // On by default: real heat-treated glass ripples, and the realism is the
+    // point. Off and the depth presets live in the Construction card.
+    rollerWave: { depth: "typical" },
   };
 };
 
@@ -90,6 +94,7 @@ export interface AppState {
   setCoating: (liteIndex: number, coating: CoatingInput | undefined) => void;
   moveCoatingToSurface: (surface: SurfaceNumber) => void;
   setFrit: (frit: FritInput | undefined) => void;
+  setRollerWave: (rollerWave: RollerWaveInput | undefined) => void;
   updateFrit: (patch: Partial<FritInput>) => void;
   setFritPattern: (pattern: FritPattern) => void;
   setUploadedMask: (texture: UploadedTexture | undefined) => void;
@@ -188,6 +193,8 @@ export const useAppStore = create<AppState>((set) => ({
     }),
 
   setFrit: (frit) => set((s) => ({ system: { ...s.system, frit } })),
+
+  setRollerWave: (rollerWave) => set((s) => ({ system: { ...s.system, rollerWave } })),
 
   updateFrit: (patch) =>
     set((s) => ({

@@ -172,6 +172,22 @@ export interface Fixture {
   mode: ExportMode;
 }
 
+/** Roller wave on a coated IGU: normal map on every lite material. */
+export const rollerWaveIgu: GlazingSystemInput = {
+  name: "Roller wave IGU",
+  lites: [
+    {
+      thickness: mm(6),
+      substrate: "clear",
+      coating: { kind: "low-e", surface: 2, reflectedColor: { r: 0.8, g: 0.85, b: 0.9 } },
+    },
+    { thickness: mm(6), substrate: "clear" },
+  ],
+  gaps: [{ width: mm(12) }],
+  assembly: { tvis: fraction(0.7), rvisExt: fraction(0.11), rvisInt: fraction(0.12) },
+  rollerWave: { depth: "typical" },
+};
+
 export const FIXTURES: Fixture[] = [
   { slug: "monolithic-clear-planar", input: monolithicClear, mode: "planar" },
   { slug: "monolithic-clear-volumetric", input: monolithicClear, mode: "volumetric" },
@@ -188,5 +204,7 @@ export const FIXTURES: Fixture[] = [
   { slug: "uniform-frit-planar", input: uniformFrit, mode: "planar" },
   { slug: "lab-specified-planar", input: labSpecified, mode: "planar" },
   { slug: "pinned-coating-planar", input: pinnedCoating, mode: "planar" },
+  { slug: "roller-wave-planar", input: rollerWaveIgu, mode: "planar" },
+  { slug: "roller-wave-volumetric", input: rollerWaveIgu, mode: "volumetric" },
   { slug: "swatch-specified-volumetric", input: swatchSpecified, mode: "volumetric" },
 ];

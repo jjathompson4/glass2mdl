@@ -144,18 +144,47 @@ export function buildReadme(options: {
     );
   }
 
+  const usesUv =
+    Boolean(input.rollerWave) ||
+    Boolean(input.frit && materials.some((m) => m.moduleFunctions.length));
+
+  if (input.rollerWave) {
+    lines.push(
+      "",
+      "ROLLER WAVE",
+      "-----------",
+      "Real heat-treated glass carries a faint periodic ripple from the",
+      "tempering rollers, and it is what makes rendered reflections read as",
+      "glass. Every glass material here samples the bundled",
+      "roller_wave_normal.png as a tangent-space normal map.",
+      "",
+      "Tune or disable it in Max without regenerating: the material's",
+      "'Roller wave strength' parameter scales the effect and 0 turns it",
+      "off. The apply script offsets each object's UVs so no two lites",
+      "carry the identical ripple.",
+    );
+  }
+
   if (input.frit && materials.some((m) => m.moduleFunctions.length)) {
     lines.push(
       "",
       "FRIT PATTERN SCALE",
       "------------------",
-      "The pattern is authored in real millimeters, assuming one UV unit",
-      "equals one meter. In 3ds Max that means a UVW Map modifier set to",
-      "1.0m x 1.0m, or Real-World Map Size enabled.",
-      "",
       "If the pattern comes out the wrong size, change the material's",
       "'Frit pattern scale' parameter instead of regenerating: 2.0 makes the",
       "pattern twice as large, 0.5 half as large.",
+    );
+  }
+
+  if (usesUv) {
+    lines.push(
+      "",
+      "UV SCALE",
+      "--------",
+      "Patterns and the roller wave are authored in real units, assuming one",
+      "UV unit equals one meter. In 3ds Max that means a UVW Map modifier",
+      "set to 1.0m x 1.0m, or Real-World Map Size enabled. The bundled apply",
+      "script sets this up on each lite automatically.",
     );
   }
 

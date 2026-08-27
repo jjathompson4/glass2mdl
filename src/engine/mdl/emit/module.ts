@@ -2,6 +2,12 @@ import type { MaterialIR } from "../../types/ir";
 import type { RGB } from "../../types/optics";
 import { MDL_VERSION, TOOL_NAME, TOOL_VERSION } from "../target";
 import { emitPatternFunction } from "./fritPattern";
+import {
+  ROLLER_WAVE_SCALE_PARAM,
+  ROLLER_WAVE_STRENGTH_PARAM,
+  emitObjectIdProbe,
+  emitRollerWaveUvw,
+} from "./rollerWave";
 import { buildScattering, weightExpression } from "./layers";
 import {
   CodeWriter,
@@ -99,13 +105,33 @@ function emitMaterial(writer: CodeWriter, imports: ImportTracker, material: Mate
     ]);
   }
 
+  const geometryArgs: Array<[string, MdlExpr]> = [];
   if (material.cutoutOpacity) {
-    args.push([
-      "geometry",
-      call("material_geometry", [
-        ["cutout_opacity", weightExpression(material.cutoutOpacity, SCALE_PARAM)],
+    geometryArgs.push([
+      "cutout_opacity",
+      weightExpression(material.cutoutOpacity, SCALE_PARAM),
+    ]);
+  }
+  if (material.normalMap) {
+    geometryArgs.push([
+      "normal",
+      call(imports.ref("base", "tangent_space_normal_texture"), [
+        [
+          "texture",
+          `texture_2d("./${material.normalMap.textureFileName}", ${imports.ref("tex", "gamma_linear")})`,
+        ],
+        ["factor", ROLLER_WAVE_STRENGTH_PARAM],
+        [
+          "uvw",
+          call(imports.ref("base", "texture_coordinate_info"), [
+            ["position", `${material.normalMap.uvwFunction}(${ROLLER_WAVE_SCALE_PARAM})`],
+          ]),
+        ],
       ]),
     ]);
+  }
+  if (geometryArgs.length) {
+    args.push(["geometry", call("material_geometry", geometryArgs)]);
   }
 
   writer.line(`= ${renderExpr(call("material", args))};`).line();
@@ -131,7 +157,13 @@ export function emitModule(
     for (const fn of material.moduleFunctions) {
       if (emittedFunctions.has(fn.name)) continue;
       emittedFunctions.add(fn.name);
-      emitPatternFunction(body, imports, fn);
+      if (fn.kind === "roller-wave-uvw") {
+        emitRollerWaveUvw(body, imports, fn);
+      } else if (fn.kind === "object-id-probe") {
+        emitObjectIdProbe(body, imports, fn);
+      } else {
+        emitPatternFunction(body, imports, fn);
+      }
     }
   }
 

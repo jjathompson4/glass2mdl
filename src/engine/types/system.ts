@@ -70,6 +70,17 @@ export interface FritInput {
   opacity: Fraction;
 }
 
+/**
+ * Heat-treatment ripple shipped as a normal map with the export. Ridges run
+ * horizontally, the common installed orientation; per-lite variety comes
+ * from the apply script's UV offsets, not from direction, because a real
+ * facade's lites share the fabricator's furnace direction.
+ */
+export interface RollerWaveInput {
+  /** Peak-to-valley depth preset over a 300mm wave. */
+  depth: "subtle" | "typical" | "strong";
+}
+
 export interface GlazingSystemInput {
   /** User label; sanitized into MDL identifiers and file names. */
   name: string;
@@ -79,6 +90,8 @@ export interface GlazingSystemInput {
   gaps: GapInput[];
   assembly: AssemblyOptics;
   frit?: FritInput;
+  /** Present = roller wave enabled for every lite. */
+  rollerWave?: RollerWaveInput;
 }
 
 /**

@@ -894,7 +894,44 @@ V5227_DGU_MANIFEST = {
 }
 
 
-def bind(type_map=None, material_factory=None):
+def _ensure_uv(obj):
+    """Give a lite a predictable 1m x 1m box UV mapping (map channel 1) plus
+    a per-object UV offset.
+
+    The exported roller wave normal map and frit patterns assume one UV unit
+    equals one meter; the box map provides that. The offset is the
+    variability: every object samples a different region of the shared maps,
+    so no two lites carry the identical ripple. It is derived from the
+    object's name (FNV-1a), so re-running Assign materials is stable. Both
+    are ordinary modifiers and undo with everything else."""
+    try:
+        m = rt.Uvwmap()
+        m.maptype = 4  # box
+        one_m = _mm(1000.0)
+        m.length = one_m
+        m.width = one_m
+        m.height = one_m
+        m.mapChannel = 1
+        rt.addModifier(obj, m)
+    except Exception as exc:  # noqa: BLE001
+        print("g2m: could not add a UVW Map to %s: %s" % (obj.name, exc))
+        return False
+    h = 2166136261
+    for ch in str(obj.name):
+        h = ((h ^ ord(ch)) * 16777619) & 0xFFFFFFFF
+    try:
+        x = rt.Uvw_Xform()
+        x.U_Offset = (h & 0xFFFF) / 65535.0 * 8.0
+        x.V_Offset = ((h >> 16) & 0xFFFF) / 65535.0 * 8.0
+        if h & 1:
+            x.U_Flip = True
+        rt.addModifier(obj, x)
+    except Exception as exc:  # noqa: BLE001
+        print("g2m: could not add the per-object UV offset to %s: %s" % (obj.name, exc))
+    return True
+
+
+def bind(type_map=None, material_factory=None, add_uv=True):
     """Build one Multi-Sub per (glazing type, lite position) and assign it.
 
     The glazing type of each lite resolves in order:
@@ -912,12 +949,16 @@ def bind(type_map=None, material_factory=None):
     material_factory=make_iray_mdl_factory(manifest) (see EXAMPLE_MANIFEST).
     Leave it None to keep the one-drag-per-type fallback: slots stay empty and
     each is a single drag from the material browser, once per type not per IGU.
+
+    add_uv (default True) gives each lite a 1m x 1m box UVW Map plus a
+    per-object UV offset, which the exported roller wave and frit patterns
+    assume; pass False to leave mapping untouched.
     """
     if rt is None:
         print("Run inside 3ds Max.")
         return
     multis = {}
-    bound = unmatched = 0
+    bound = unmatched = uv_mapped = 0
     for obj in _tagged_objects():
         stamped = rt.getUserProp(obj, PROP_TYPE)
         prefix = str(stamped) if stamped not in (None, "", "undefined") else None
@@ -945,10 +986,15 @@ def bind(type_map=None, material_factory=None):
                 mat = material_factory(prefix, position, slot) if material_factory else None
                 mm.materialList[i] = mat
             multis[key] = mm
+        if add_uv and _ensure_uv(obj):
+            uv_mapped += 1
         obj.material = multis[key]
         bound += 1
-    print("g2m: bound %d objects to %d Multi-Sub materials; %d unmatched."
+    print("g2m: assigned %d objects to %d Multi-Sub materials; %d unmatched."
           % (bound, len(multis), unmatched))
+    if add_uv:
+        print("g2m: UV mapped %d lites (1m box map + per-object offset, so the"
+              " roller wave varies lite to lite)." % uv_mapped)
     if material_factory is None and multis:
         print("Slots are empty by design. Drag the glass2mdl materials from")
         print("the browser into each Multi-Sub once (per type, not per IGU):")
