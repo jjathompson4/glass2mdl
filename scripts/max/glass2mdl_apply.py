@@ -838,56 +838,83 @@ def _roller_wave_bitmap():
 
 
 def _wire_roller_wave(mat, bmp, mult):
-    """Wire the bump map into the material's geometry normal map channel.
+    """Wire the bump map into the material's geometry normal map slot.
 
-    The Iray+ MDL material exposes Max-side geometry channels (opacity /
-    normal / displacement); the normal one is field-confirmed to distort
-    rendered reflections. Property names are probed rather than hard-coded so
-    plugin versions with different spellings still wire up. Returns
+    The sockets Slate shows on the Iray+ material (geometry opacity / normal /
+    displacement) are the material's SUB-TEXMAP SLOTS, so enumerate those the
+    way Slate does; plain properties are only a fallback for other plugin
+    spellings. The normal socket is field-confirmed to distort rendered
+    reflections (hand-wired Noise map, 2026-08-27). Returns
     (wired, amount_set)."""
+
+    def is_normal(name):
+        ln = name.lower()
+        return "normal" in ln and "reflect" not in ln
+
+    # 1. Sub-texmap slots: what Slate renders as input sockets.
+    slot_names = []
+    try:
+        count = int(rt.getNumSubTexmaps(mat))
+    except Exception:  # noqa: BLE001
+        count = 0
+    best = None
+    for i in range(1, count + 1):
+        try:
+            name = str(rt.getSubTexmapSlotName(mat, i))
+        except Exception:  # noqa: BLE001
+            name = ""
+        slot_names.append(name)
+        if is_normal(name):
+            score = 2 if "geometry" in name.lower() else 1
+            if best is None or score > best[0]:
+                best = (score, i, name)
+
+    wired = False
+    if best is not None:
+        try:
+            rt.setSubTexmap(mat, best[1], bmp)
+            wired = True
+        except Exception as exc:  # noqa: BLE001
+            print("g2m: setSubTexmap on '%s' failed: %s" % (best[2], exc))
+
+    # 2. Property fallback, plus the enable/amount sweep either way.
     try:
         names = [str(n) for n in rt.getPropNames(mat)]
     except Exception:  # noqa: BLE001
         names = []
-
-    def slot_score(n):
-        ln = n.lower()
-        if "normal" not in ln or "reflect" in ln:
-            return -1
-        if any(k in ln for k in ("amount", "strength", "factor", "enable", "_on")):
-            return -1
-        return 2 if "geometry" in ln else 1
-
-    best = None
-    for n in names:
-        s = slot_score(n)
-        if s > 0 and (best is None or s > best[0]):
-            best = (s, n)
-    if best is None:
-        return False, False
-    try:
-        rt.setProperty(mat, best[1], bmp)
-    except Exception as exc:  # noqa: BLE001
-        print("g2m: could not wire the roller wave map into '%s': %s" % (best[1], exc))
-        return False, False
+    if not wired:
+        for n in names:
+            ln = n.lower()
+            if is_normal(n) and not any(
+                k in ln for k in ("amount", "strength", "factor", "enable", "_on")
+            ):
+                try:
+                    rt.setProperty(mat, n, bmp)
+                    wired = True
+                    break
+                except Exception:  # noqa: BLE001
+                    continue
 
     amount_set = False
-    for n in names:
-        ln = n.lower()
-        if "normal" in ln and "reflect" not in ln and ("amount" in ln or "strength" in ln):
-            try:
-                rt.setProperty(mat, n, mult)
-                amount_set = True
-            except Exception:  # noqa: BLE001
-                pass
-    for n in names:
-        ln = n.lower()
-        if "normal" in ln and "reflect" not in ln and ("enable" in ln or ln.endswith("_on")):
-            try:
-                rt.setProperty(mat, n, True)
-            except Exception:  # noqa: BLE001
-                pass
-    return True, amount_set
+    if wired:
+        for n in names:
+            ln = n.lower()
+            if is_normal(n) and ("amount" in ln or "strength" in ln):
+                try:
+                    rt.setProperty(mat, n, mult)
+                    amount_set = True
+                except Exception:  # noqa: BLE001
+                    pass
+            elif is_normal(n) and ("enable" in ln or ln.endswith("_on")):
+                try:
+                    rt.setProperty(mat, n, True)
+                except Exception:  # noqa: BLE001
+                    pass
+    elif slot_names:
+        # Nothing matched: name what exists, so the next fix is data-driven.
+        print("g2m: no normal slot among this material's sockets: %s"
+              % ", ".join(repr(s) for s in slot_names if s))
+    return wired, amount_set
 
 
 def make_iray_mdl_factory(manifest):
