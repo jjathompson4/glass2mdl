@@ -78,6 +78,13 @@ export default function About() {
               angles follows a standard falloff curve rather than measured data.
             </li>
             <li>
+              Color is representative, not measured. The tool matches your data sheet&apos;s
+              three visible light values exactly, but it works in red, green, and blue rather
+              than the full light spectrum, and the hue comes from your substrate choice.
+              Import of measured spectra from the LBNL International Glazing Database is
+              planned.
+            </li>
+            <li>
               Outputs are tested in Iray+ 3.1 for 3ds Max 2024. Other MDL renderers are
               untested.
             </li>
