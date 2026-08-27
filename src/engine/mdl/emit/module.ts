@@ -5,8 +5,8 @@ import { emitPatternFunction } from "./fritPattern";
 import {
   ROLLER_WAVE_SCALE_PARAM,
   ROLLER_WAVE_STRENGTH_PARAM,
+  ROLLER_WAVE_TILE_METERS,
   emitObjectIdProbe,
-  emitRollerWaveUvw,
 } from "./rollerWave";
 import { buildScattering, weightExpression } from "./layers";
 import {
@@ -113,6 +113,12 @@ function emitMaterial(writer: CodeWriter, imports: ImportTracker, material: Mate
     ]);
   }
   if (material.normalMap) {
+    // The canonical coordinate chain stock Iray materials use for bump:
+    // coordinate_source supplies real surface tangents from UV channel 0 and
+    // transform_coordinate scales position (tangents pass through), so the
+    // tile lands at its physical size under the 1 UV unit = 1 meter rule.
+    // Never hand-build texture_coordinate_info here: its tangent defaults
+    // are constant axis vectors, not the surface frame.
     geometryArgs.push([
       "normal",
       call(imports.ref("base", "tangent_space_normal_texture"), [
@@ -123,8 +129,23 @@ function emitMaterial(writer: CodeWriter, imports: ImportTracker, material: Mate
         ["factor", ROLLER_WAVE_STRENGTH_PARAM],
         [
           "uvw",
-          call(imports.ref("base", "texture_coordinate_info"), [
-            ["position", `${material.normalMap.uvwFunction}(${ROLLER_WAVE_SCALE_PARAM})`],
+          call(imports.ref("base", "transform_coordinate"), [
+            [
+              "transform",
+              call(imports.ref("base", "rotation_translation_scale"), [
+                [
+                  "scaling",
+                  `float3(1.0 / (${num(ROLLER_WAVE_TILE_METERS)} * ${ROLLER_WAVE_SCALE_PARAM}))`,
+                ],
+              ]),
+            ],
+            [
+              "coordinate",
+              call(imports.ref("base", "coordinate_source"), [
+                ["coordinate_system", imports.ref("base", "texture_coordinate_uvw")],
+                ["texture_space", "0"],
+              ]),
+            ],
           ]),
         ],
       ]),
@@ -157,9 +178,7 @@ export function emitModule(
     for (const fn of material.moduleFunctions) {
       if (emittedFunctions.has(fn.name)) continue;
       emittedFunctions.add(fn.name);
-      if (fn.kind === "roller-wave-uvw") {
-        emitRollerWaveUvw(body, imports, fn);
-      } else if (fn.kind === "object-id-probe") {
+      if (fn.kind === "object-id-probe") {
         emitObjectIdProbe(body, imports, fn);
       } else {
         emitPatternFunction(body, imports, fn);

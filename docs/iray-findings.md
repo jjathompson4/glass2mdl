@@ -197,6 +197,17 @@ A solid's `surface` covers the whole boundary, so an integrated frit lands on
    (cutsheets are normal-incidence only); one coating at a time; frit sits outside
    the optical fit (vision-area numbers are fitted, frit layered over the result);
    RGB per-channel until IGDB spectral import.
+6. **Never hand-build `texture_coordinate_info` for a normal map.** The struct's
+   `tangent_u`/`tangent_v` defaults are the constant vectors (1,0,0)/(0,1,0) —
+   not the surface tangents — so `base::tangent_space_normal_texture` perturbs
+   along a garbage frame. Field result: the first roller wave shipped this way
+   rendered completely flat at any strength (2026-08-27). Always obtain the
+   frame from `base::coordinate_source(texture_coordinate_uvw, 0)` and scale
+   through `base::transform_coordinate` (which carries tangents through) — the
+   idiom stock Iray materials use. Position-only construction stays fine for
+   plain color/mono lookups (the frit mask path), where tangents are unused.
+   Kit tests 09 + 11 isolate the remaining unknowns (texture decode vs the
+   `material_geometry.normal` slot) if it ever renders flat again.
 
 ---
 

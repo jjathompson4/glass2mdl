@@ -76,7 +76,7 @@ export function solvePlanar(input: GlazingSystemInput): SolveOutput {
 
   const textures: { fileName: string; bytes: Uint8Array }[] = [];
   if (input.rollerWave) {
-    textures.push(...applyRollerWave([material], input.rollerWave, prefix).textures);
+    textures.push(...applyRollerWave([material], input.rollerWave).textures);
     notes.push(
       "Roller wave assumes 1 UV unit = 1 meter (a 1 m x 1 m UVW Map, or Real-World Map Size).",
     );

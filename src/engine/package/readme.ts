@@ -160,8 +160,10 @@ export function buildReadme(options: {
       "",
       "Tune or disable it in Max without regenerating: the material's",
       "'Roller wave strength' parameter scales the effect and 0 turns it",
-      "off. The apply script offsets each object's UVs so no two lites",
-      "carry the identical ripple.",
+      "off. The apply script adds a 1 m UV map modifier so the ripple lands",
+      "at true scale (mapping only; the glass shape is untouched) and",
+      "offsets each object's UVs so no two lites carry the identical",
+      "ripple.",
     );
   }
 

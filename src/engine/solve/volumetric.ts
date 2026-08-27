@@ -118,7 +118,7 @@ export function solveVolumetric(input: GlazingSystemInput): SolveOutput {
   // Roller wave goes on every glass lite (not the frit decal below): the
   // ripple is a property of the heat-treated glass itself.
   if (input.rollerWave) {
-    textures.push(...applyRollerWave(materials, input.rollerWave, prefix).textures);
+    textures.push(...applyRollerWave(materials, input.rollerWave).textures);
   }
 
   // Frit gets its own thin decal material rather than being folded into a lite.

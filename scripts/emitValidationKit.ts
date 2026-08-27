@@ -259,22 +259,22 @@ const ENTRIES: KitEntry[] = [
     slug: "09_roller_wave",
     title: "Does the roller wave normal map ripple reflections at true scale?",
     question:
-      "Copy roller_wave_normal.png (emitted next to this kit) beside the .mdl. Apply to a 1m x 1m plane AND to the closed box, both with a 1.0m x 1.0m UVW Map. View a bright reflection at a grazing angle.",
+      "Copy roller_wave_normal.png (emitted next to this kit) beside the .mdl. Apply to a 1m x 1m plane AND to the closed box, both with a 1.0m x 1.0m UVW Map. Set roller_wave_strength to 0.05 first so success is unmistakable, then return it to the default. View a bright reflection at a grazing angle.",
     expected:
-      "Reflections ripple with roughly a 300mm period and the ripple visibly varies across the surface rather than repeating a uniform sine. Raising roller_wave_strength to 0.2 makes it obvious; 0 turns the surface optically flat. A flat surface at the default means normal maps in material_geometry do not work in this build.",
+      "Reflections ripple in horizontal bands with roughly a 300mm period, and the ripple visibly varies across the surface rather than repeating a uniform sine. 0 turns the surface optically flat. If test 11 shows stripes but this stays flat at any strength, material_geometry.normal is the broken link in this build (see the roller wave decision table at the end).",
     materials: [
       material({
         name: "test09_roller_wave",
         displayName: "09 roller wave",
         layers: [coating(0.15, WHITE), glassBase("transmit")],
-        normalMap: { textureFileName: "roller_wave_normal.png", uvwFunction: "test09_roller_uvw" },
+        normalMap: { textureFileName: "roller_wave_normal.png" },
         params: [
           {
             name: "roller_wave_strength",
             type: "float",
-            defaultValue: 0.03125,
+            defaultValue: 0.00391,
             displayName: "Roller wave strength",
-            description: "Default matches a typical 0.08mm wave; try 0.2 to exaggerate, 0 to disable.",
+            description: "Default matches a typical 0.08mm wave; try 0.05 to exaggerate, 0 to disable.",
           },
           {
             name: "roller_wave_scale",
@@ -283,9 +283,6 @@ const ENTRIES: KitEntry[] = [
             displayName: "Roller wave scale",
             description: "Leave at 1.0 for this test.",
           },
-        ],
-        moduleFunctions: [
-          { kind: "roller-wave-uvw", name: "test09_roller_uvw", direction: "horizontal" },
         ],
         comments: ["Requires roller_wave_normal.png beside the module and a 1m x 1m UVW map."],
       }),
@@ -307,8 +304,49 @@ const ENTRIES: KitEntry[] = [
           { kind: "frit", color: RED, opacity: 1, weight: { kind: "function", functionName: "test10_object_value" } },
           glassBase("transmit"),
         ],
+        params: [
+          {
+            name: "frit_pattern_scale",
+            type: "float",
+            defaultValue: 1,
+            displayName: "Frit pattern scale",
+            description: "Unused by this probe; leave at 1.0.",
+          },
+        ],
         moduleFunctions: [{ kind: "object-id-probe", name: "test10_object_value" }],
         comments: ["Probe: red coverage is math::frac(object_id * phi)."],
+      }),
+    ],
+  },
+  {
+    slug: "11_texture_decode",
+    title: "Does the shipped roller_wave_normal.png decode in this build at all?",
+    question:
+      "Copy roller_wave_normal.png beside the .mdl. Apply to the 1m x 1m plane with its 1.0m x 1.0m UVW Map and render flat-on. This wires the SAME image into a visible color slot through the render-validated frit mask path, so it isolates texture loading from everything the normal path adds.",
+    expected:
+      "Soft horizontal red banding with roughly a 300mm period (the normal map's channels read as brightness). Uniform red with no banding means Iray could not decode the shipped PNG, and no red at all means the texture failed to load entirely.",
+    materials: [
+      material({
+        name: "test11_texture_decode",
+        displayName: "11 texture decode probe",
+        thinWalled: true,
+        layers: [
+          { kind: "frit", color: RED, opacity: 1, weight: { kind: "function", functionName: "test11_map_value" } },
+          glassBase("transmit"),
+        ],
+        params: [
+          {
+            name: "frit_pattern_scale",
+            type: "float",
+            defaultValue: 2.4,
+            displayName: "Frit pattern scale",
+            description: "2.4 spreads one map tile over its true 2.4m span; leave as is.",
+          },
+        ],
+        moduleFunctions: [
+          { kind: "texture-mask", name: "test11_map_value", textureFileName: "roller_wave_normal.png" },
+        ],
+        comments: ["Probe: red coverage is the normal map's mono average. Requires roller_wave_normal.png beside the module."],
       }),
     ],
   },
@@ -399,6 +437,17 @@ function buildProtocol(): string {
     "    plus two planes; exact, at the cost of geometry the user must build.",
     "  Else                                         -> single coating plane and",
     "    a documented 1-2 point reflectance error on low-e products.",
+    "",
+    "ROLLER WAVE DECISION (tests 09 and 11 together)",
+    "-----------------------------------------------",
+    "  11 shows banding, 09 ripples       -> the feature works; ship it.",
+    "  11 shows banding, 09 stays flat    -> the texture is fine but",
+    "    material_geometry.normal is dead in this build; the fix is moving the",
+    "    perturbed normal onto the BSDF layers' own normal parameter.",
+    "  11 shows uniform red, no banding   -> Iray cannot decode the shipped",
+    "    PNG; the file format needs changing.",
+    "  11 shows no red at all             -> the texture file was not found;",
+    "    check it sits beside the .mdl.",
     "",
   );
 

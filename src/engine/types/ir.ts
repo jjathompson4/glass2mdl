@@ -64,8 +64,6 @@ export type ModuleFunctionIR =
       orientation: "horizontal" | "vertical";
     }
   | { kind: "texture-mask"; name: string; textureFileName: string }
-  /** Real-world UVs scaled to the roller wave tile, axis-swapped as needed. */
-  | { kind: "roller-wave-uvw"; name: string; direction: "horizontal" | "vertical" }
   /** Validation-kit probe: a 0..1 value derived from state::object_id(). */
   | { kind: "object-id-probe"; name: string };
 
@@ -101,10 +99,11 @@ export interface MaterialIR {
   cutoutOpacity?: FritWeightSource;
   /**
    * Tangent-space normal map applied through material_geometry.normal
-   * (roller wave). `uvwFunction` names a "roller-wave-uvw" module function
-   * that supplies the scaled texture coordinates.
+   * (roller wave). The emitter builds the canonical coordinate chain
+   * (coordinate_source + transform_coordinate) itself; ridge orientation is
+   * baked into the map.
    */
-  normalMap?: { textureFileName: string; uvwFunction: string };
+  normalMap?: { textureFileName: string };
   params: MaterialParamIR[];
   moduleFunctions: ModuleFunctionIR[];
   /** Provenance and assumption notes emitted above the material. */

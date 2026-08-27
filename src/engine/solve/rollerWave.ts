@@ -7,29 +7,20 @@ import {
   rollerWaveNormalMap,
   rollerWaveStrength,
 } from "../mdl/emit/rollerWave";
-import type { MaterialIR, MaterialParamIR, ModuleFunctionIR } from "../types/ir";
+import type { MaterialIR, MaterialParamIR } from "../types/ir";
 import type { RollerWaveInput } from "../types/system";
 
 /**
- * Attach the roller wave normal map to a set of glass materials: the shared
- * UV helper function, the two tuning parameters, the geometry hook, and the
- * per-material provenance note. Appearance-only; the solved optics are
- * untouched.
+ * Attach the roller wave normal map to a set of glass materials: the two
+ * tuning parameters, the geometry hook, and the per-material provenance
+ * note. Appearance-only; the solved optics are untouched. Ridge orientation
+ * is baked into the map (horizontal, the installed norm: a facade's lites
+ * share the fabricator's furnace direction).
  */
 export function applyRollerWave(
   materials: MaterialIR[],
   rollerWave: RollerWaveInput,
-  prefix: string,
 ): { textures: { fileName: string; bytes: Uint8Array }[] } {
-  const fnName = `${prefix}_roller_wave_uvw`;
-  // Always horizontal: an installed facade's lites share the fabricator's
-  // furnace direction, so a uniform orientation is the realistic one.
-  const fn: ModuleFunctionIR = {
-    kind: "roller-wave-uvw",
-    name: fnName,
-    direction: "horizontal",
-  };
-
   const params: MaterialParamIR[] = [
     {
       name: ROLLER_WAVE_STRENGTH_PARAM,
@@ -52,8 +43,7 @@ export function applyRollerWave(
   ];
 
   for (const material of materials) {
-    material.normalMap = { textureFileName: ROLLER_WAVE_FILE, uvwFunction: fnName };
-    material.moduleFunctions = [...material.moduleFunctions, fn];
+    material.normalMap = { textureFileName: ROLLER_WAVE_FILE };
     material.params = [...material.params, ...params.map((p) => ({ ...p }))];
     material.comments = [
       ...material.comments,

@@ -60,8 +60,11 @@ describe.each(sources)("$slug", ({ source, result }) => {
 
   it("writes float literals MDL will accept", () => {
     // Every numeric argument must carry a decimal point; a bare integer where a
-    // float is expected is a compile error in MDL.
-    const args = [...source.matchAll(/^\s+\w+: (-?\d[\d.]*)(,?)$/gm)].map((m) => m[1]);
+    // float is expected is a compile error in MDL. texture_space is the one
+    // int-typed argument the emitter passes, where a bare integer is required.
+    const args = [...source.matchAll(/^\s+(\w+): (-?\d[\d.]*)(,?)$/gm)]
+      .filter((m) => m[1] !== "texture_space")
+      .map((m) => m[2]);
     for (const value of args) {
       expect(value, `"${value}" is missing a decimal point`).toContain(".");
     }

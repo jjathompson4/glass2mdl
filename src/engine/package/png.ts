@@ -6,7 +6,7 @@ import { zlibSync } from "fflate";
  * The browser's canvas encoder produces different bytes per browser, which
  * would make `contentRevision` (and the golden tests) unstable for generated
  * textures — so the shipped maps are encoded here instead: fixed chunk
- * layout, filter 0 on every row, fflate's zlib at a fixed level.
+ * layout, the Sub filter on every row, fflate's zlib at a fixed level.
  */
 
 const CRC_TABLE = (() => {
@@ -40,33 +40,26 @@ function chunk(type: string, data: Uint8Array): Uint8Array {
 }
 
 /**
- * Encode 16-bit-per-channel RGB pixels as a PNG.
- *
- * `pixels` is width*height*3 samples in row-major order, each 0..65535.
- * Sixteen bits matter here: the roller wave map stores very small normal
- * perturbations, and 8-bit quantization would band visibly in glancing
- * reflections.
+ * Assemble the PNG from big-endian packed sample bytes. Every row is written
+ * with filter 1 (Sub): smooth gradients delta-encode into tiny values, which
+ * is what lets zlib actually compress a continuously varying map.
  */
-export function encodePngRgb16(
+function encode(
   width: number,
   height: number,
-  pixels: Uint16Array,
+  bitDepth: 8 | 16,
+  samples: Uint8Array,
 ): Uint8Array {
-  if (pixels.length !== width * height * 3) {
-    throw new Error("pixel buffer does not match dimensions");
-  }
-
-  // Raw stream: one filter byte (0 = None) per row, then big-endian samples.
-  const rowBytes = width * 6;
+  const bytesPerPixel = 3 * (bitDepth / 8);
+  const rowBytes = width * bytesPerPixel;
   const raw = new Uint8Array(height * (1 + rowBytes));
-  let p = 0;
   for (let y = 0; y < height; y++) {
+    const src = y * rowBytes;
     let o = y * (1 + rowBytes);
-    raw[o++] = 0;
-    for (let x = 0; x < width * 3; x++) {
-      const v = pixels[p++];
-      raw[o++] = (v >> 8) & 0xff;
-      raw[o++] = v & 0xff;
+    raw[o++] = 1; // Sub filter
+    for (let i = 0; i < rowBytes; i++) {
+      const left = i >= bytesPerPixel ? samples[src + i - bytesPerPixel] : 0;
+      raw[o++] = (samples[src + i] - left) & 0xff;
     }
   }
 
@@ -74,7 +67,7 @@ export function encodePngRgb16(
   const ihdrView = new DataView(ihdr.buffer);
   ihdrView.setUint32(0, width);
   ihdrView.setUint32(4, height);
-  ihdr[8] = 16; // bit depth
+  ihdr[8] = bitDepth;
   ihdr[9] = 2; // color type: truecolor RGB
   ihdr[10] = 0; // compression
   ihdr[11] = 0; // filter method
@@ -96,4 +89,45 @@ export function encodePngRgb16(
     offset += part.length;
   }
   return out;
+}
+
+/**
+ * Encode 8-bit-per-channel RGB pixels as a PNG.
+ *
+ * `pixels` is width*height*3 samples in row-major order, each 0..255. This is
+ * the format every image loader reads; shipped maps bake their signal wide
+ * enough (see BAKE_EXAGGERATION) that 8 bits do not band.
+ */
+export function encodePngRgb8(
+  width: number,
+  height: number,
+  pixels: Uint8Array,
+): Uint8Array {
+  if (pixels.length !== width * height * 3) {
+    throw new Error("pixel buffer does not match dimensions");
+  }
+  return encode(width, height, 8, pixels);
+}
+
+/**
+ * Encode 16-bit-per-channel RGB pixels as a PNG.
+ *
+ * `pixels` is width*height*3 samples in row-major order, each 0..65535,
+ * stored big-endian as PNG requires.
+ */
+export function encodePngRgb16(
+  width: number,
+  height: number,
+  pixels: Uint16Array,
+): Uint8Array {
+  if (pixels.length !== width * height * 3) {
+    throw new Error("pixel buffer does not match dimensions");
+  }
+  const samples = new Uint8Array(pixels.length * 2);
+  let o = 0;
+  for (let i = 0; i < pixels.length; i++) {
+    samples[o++] = (pixels[i] >> 8) & 0xff;
+    samples[o++] = pixels[i] & 0xff;
+  }
+  return encode(width, height, 16, samples);
 }

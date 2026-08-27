@@ -1284,6 +1284,13 @@ def show_gui():
     row3b.addWidget(btn_bind)
     row3b.addStretch(1)
     lay3.addLayout(row3b)
+    lbl_uv = QtWidgets.QLabel(
+        "Assigning also adds a 1 m UV map modifier so textures land at true "
+        "scale. Mapping only; the glass shape is untouched. Each object gets "
+        "a small offset so no two lites ripple alike.")
+    lbl_uv.setWordWrap(True)
+    lbl_uv.setStyleSheet("color: gray;")
+    lay3.addWidget(lbl_uv)
 
     def choose_manifest():
         path, _filter = QtWidgets.QFileDialog.getOpenFileName(

@@ -1,4 +1,4 @@
-import { encodePngRgb16 } from "../../package/png";
+import { encodePngRgb8 } from "../../package/png";
 import type { ModuleFunctionIR } from "../../types/ir";
 import { CodeWriter, ImportTracker } from "./writer";
 
@@ -13,6 +13,10 @@ import { CodeWriter, ImportTracker } from "./writer";
  * incommensurate secondary wavelengths plus low-frequency amplitude and phase
  * modulation and a seeded irregularity — and the Max apply script offsets
  * each object's UVs so no two lites sample the same region.
+ *
+ * Orientation is baked into the map: the wave varies along V, so under the
+ * 1 UV unit = 1 meter box mapping (V vertical on a facade) the ridges run
+ * horizontally, the installed norm. The MDL side never swaps axes.
  */
 
 export const ROLLER_WAVE_FILE = "roller_wave_normal.png";
@@ -26,10 +30,11 @@ export const ROLLER_WAVE_WAVELENGTH_MM = 300;
 /**
  * The map stores slopes exaggerated by this factor over a "typical" 0.08mm
  * peak-to-valley wave; the material's strength parameter divides it back
- * out. Baking exaggerated keeps the 16-bit samples well above quantization
- * while the defaults stay small honest numbers.
+ * out. Baking exaggerated spreads the signal across ~±40 of the 8-bit
+ * levels, so quantization never bands, while the defaults stay small honest
+ * numbers.
  */
-const BAKE_EXAGGERATION = 32;
+const BAKE_EXAGGERATION = 256;
 
 /** Peak-to-valley depth presets, in millimeters over a 300mm wave. */
 export const ROLLER_WAVE_DEPTH_MM: Record<"subtle" | "typical" | "strong", number> = {
@@ -90,10 +95,11 @@ const TAU = Math.PI * 2;
 
 /**
  * Surface height in meters at a point on the tile (u, v in 0..1), for a wave
- * running along u. Every term is periodic in the tile so the map tiles
- * seamlessly; the secondary wavelengths are near-incommensurate with the
- * primary (rounded to whole cycles per tile), which is what keeps any two
- * waves in the tile from matching.
+ * running along v — ridges land horizontal under the standard box mapping.
+ * Every term is periodic in the tile so the map tiles seamlessly; the
+ * secondary wavelengths are near-incommensurate with the primary (rounded to
+ * whole cycles per tile), which is what keeps any two waves in the tile from
+ * matching.
  */
 function buildHeightField(): (u: number, v: number) => number {
   const tileMm = ROLLER_WAVE_TILE_METERS * 1000;
@@ -110,9 +116,9 @@ function buildHeightField(): (u: number, v: number) => number {
     const drift = phaseNoise(u, v) * 0.9;
     const envelope = 0.72 + 0.28 * ampNoise(u, v);
     const wave =
-      Math.sin(TAU * (primary * u + drift)) +
-      0.34 * Math.sin(TAU * (second * u + 0.27) + drift * 2.1) +
-      0.22 * Math.sin(TAU * (third * u + 0.71) - drift * 1.4);
+      Math.sin(TAU * (primary * v + drift)) +
+      0.34 * Math.sin(TAU * (second * v + 0.27) + drift * 2.1) +
+      0.22 * Math.sin(TAU * (third * v + 0.71) - drift * 1.4);
     const micro = 0.1 * microNoise(u, v);
     return amplitude * (envelope * wave + micro);
   };
@@ -122,16 +128,17 @@ let cachedMap: Uint8Array | null = null;
 
 /**
  * The shipped tangent-space normal map: slopes of the height field, encoded
- * as 16-bit RGB with the usual (n * 0.5 + 0.5) mapping. Deterministic and
- * memoized; `contentRevision` hashes these bytes, so the map participates in
- * cache-busting like every other shipped file.
+ * as 8-bit RGB with the usual (n * 0.5 + 0.5) mapping — the format every
+ * image loader reads. Deterministic and memoized; `contentRevision` hashes
+ * these bytes, so the map participates in cache-busting like every other
+ * shipped file.
  */
 export function rollerWaveNormalMap(): Uint8Array {
   if (cachedMap) return cachedMap;
   const height = buildHeightField();
   const tile = ROLLER_WAVE_TILE_METERS;
   const step = 1 / SIZE;
-  const pixels = new Uint16Array(SIZE * SIZE * 3);
+  const pixels = new Uint8Array(SIZE * SIZE * 3);
   let p = 0;
   for (let y = 0; y < SIZE; y++) {
     const v = y / SIZE;
@@ -143,48 +150,12 @@ export function rollerWaveNormalMap(): Uint8Array {
       const inv = 1 / Math.sqrt(dhdu * dhdu + dhdv * dhdv + 1);
       const n = [-dhdu * inv, -dhdv * inv, inv];
       for (let c = 0; c < 3; c++) {
-        pixels[p++] = Math.max(0, Math.min(65535, Math.round((n[c] * 0.5 + 0.5) * 65535)));
+        pixels[p++] = Math.max(0, Math.min(255, Math.round((n[c] * 0.5 + 0.5) * 255)));
       }
     }
   }
-  cachedMap = encodePngRgb16(SIZE, SIZE, pixels);
+  cachedMap = encodePngRgb8(SIZE, SIZE, pixels);
   return cachedMap;
-}
-
-/**
- * Emit the module-level UV helper the normal lookup uses: real-world UVs
- * scaled to the tile, with the axes swapped for a vertical wave. Kept as a
- * named function (like the frit patterns) so the material expression stays
- * readable and the direction choice is visible in the .mdl source.
- */
-export function emitRollerWaveUvw(
-  writer: CodeWriter,
-  imports: ImportTracker,
-  fn: Extract<ModuleFunctionIR, { kind: "roller-wave-uvw" }>,
-): void {
-  const texCoord = `${imports.ref("state", "texture_coordinate")}(0)`;
-  writer.comment([
-    "Roller wave UV helper: one texture tile spans "
-      + `${ROLLER_WAVE_TILE_METERS} m under the 1 UV unit = 1 meter convention.`,
-    // The map's wave varies along its own U axis, so ridge orientation is
-    // set by which real-world axis feeds U: V for horizontal ridges (the
-    // installed norm), U for vertical.
-    fn.direction === "horizontal"
-      ? "Axes are swapped so the ridges run horizontally, the installed norm."
-      : "Ridges run vertically.",
-  ]);
-  writer.line(`export float3 ${fn.name}(uniform float scale = 1.0)`);
-  writer.line("{");
-  writer.indent();
-  writer.line(`float3 uvw = ${texCoord};`);
-  if (fn.direction === "horizontal") {
-    writer.line(`return float3(uvw.y, uvw.x, 0.0) / (${ROLLER_WAVE_TILE_METERS} * scale);`);
-  } else {
-    writer.line(`return float3(uvw.x, uvw.y, 0.0) / (${ROLLER_WAVE_TILE_METERS} * scale);`);
-  }
-  writer.outdent();
-  writer.line("}");
-  writer.line();
 }
 
 /**
@@ -200,7 +171,9 @@ export function emitObjectIdProbe(
 ): void {
   const objectId = `${imports.ref("state", "object_id")}()`;
   const frac = imports.ref("math", "frac");
-  writer.line(`export float ${fn.name}()`);
+  // The scale parameter is unused; weight functions are always called with
+  // the material's frit_pattern_scale, so the signature must accept it.
+  writer.line(`export float ${fn.name}(uniform float scale = 1.0)`);
   writer.line("{");
   writer.indent();
   writer.line(`return ${frac}(float(${objectId}) * 0.6180339887);`);
