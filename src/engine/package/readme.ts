@@ -60,7 +60,7 @@ export function buildReadme(options: {
       ? [
           "4. In 3ds Max: Scripting > Run Script > glass2mdl_apply.py (from",
           "   this folder). A window walks the rest: select your glazing,",
-          "   Tag + color check, flip anything blue-out, choose the bundled",
+          "   Tag + color check, flip anything red-out, choose the bundled",
           "   bind_manifest.json (placement is verified), Assign materials.",
         ]
       : []),
