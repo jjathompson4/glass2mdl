@@ -146,9 +146,10 @@ so frit stays UV-based and coverage % is the spec.
    optics-only (export test enforces it); planar mode has no script, so the
    README gives the manual wiring settings. UVW Map + name-seeded per-object
    offsets still provide the lite-to-lite variability. Kit entry renamed
-   09_object_variation (state::object_id probe; arity bug fixed). GATE: one
-   clean Assign run confirming the AUTOMATED wiring reproduces the manual
-   result, then deploy on Jeff's word. Accuracy: appearance-only; Output
+   09_object_variation (state::object_id probe; arity bug fixed). SHIPPED: automated wiring
+   field-confirmed on a clean Assign run and deployed to glass2mdl.com
+   2026-08-27, along with green/red/blue QA colors and the About page's
+   spectral-accuracy note. Accuracy: appearance-only; Output
    Amount 0 for calibrated luminance studies.
 
 9. **Workstation follow-ups** — the Iray+ API discovery and the apply-workflow
