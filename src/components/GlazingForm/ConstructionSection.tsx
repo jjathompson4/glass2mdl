@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import {
   SUBSTRATE_LABELS,
   gray,
@@ -59,32 +59,36 @@ export function ConstructionSection() {
     >
       <div className="space-y-2">
         {system.lites.map((lite, index) => (
-          <div key={index} className="rounded-md border border-border-subtle p-3">
-            <div className="grid grid-cols-[auto_1fr_1fr] items-end gap-3">
-              <span className="pb-1.5 text-xs font-semibold text-muted">Lite {index + 1}</span>
-              <Field label={`Thickness (${unitLabel(unit)})`}>
-                <NumberInput
-                  value={toDisplay(lite.thickness, unit)}
-                  onChange={(value) => updateLite(index, { thickness: fromDisplay(value, unit) })}
-                  min={0}
-                  step={unitStep(unit)}
-                />
-              </Field>
-              <Field label="Substrate">
-                <Select<SubstrateTint>
-                  value={lite.substrate}
-                  onChange={(substrate) => updateLite(index, { substrate })}
-                  options={SUBSTRATE_ORDER.map((tint) => ({
-                    value: tint,
-                    label: SUBSTRATE_LABELS[tint],
-                  }))}
-                />
-              </Field>
+          <Fragment key={index}>
+            <div className="rounded-md border border-border-subtle p-3">
+              <div className="grid grid-cols-[auto_1fr_1fr] items-end gap-3">
+                <span className="pb-1.5 text-xs font-semibold text-muted">Lite {index + 1}</span>
+                <Field label={`Thickness (${unitLabel(unit)})`}>
+                  <NumberInput
+                    value={toDisplay(lite.thickness, unit)}
+                    onChange={(value) => updateLite(index, { thickness: fromDisplay(value, unit) })}
+                    min={0}
+                    step={unitStep(unit)}
+                  />
+                </Field>
+                <Field label="Substrate">
+                  <Select<SubstrateTint>
+                    value={lite.substrate}
+                    onChange={(substrate) => updateLite(index, { substrate })}
+                    options={SUBSTRATE_ORDER.map((tint) => ({
+                      value: tint,
+                      label: SUBSTRATE_LABELS[tint],
+                    }))}
+                  />
+                </Field>
+              </div>
             </div>
 
+            {/* The cavity gets its own slim card between the lites, sunken so
+                it reads as the gap rather than part of a pane. */}
             {system.gaps[index] ? (
-              <div className="mt-3 flex items-end gap-3 border-t border-border-subtle pt-3">
-                <span className="pb-1.5 text-xs text-muted">Air space</span>
+              <div className="flex items-center gap-3 rounded-md border border-border-subtle bg-surface-sunken px-3 py-2">
+                <span className="text-xs font-semibold text-muted">Air space</span>
                 <div className="w-28">
                   <NumberInput
                     value={toDisplay(system.gaps[index].width, unit)}
@@ -98,7 +102,7 @@ export function ConstructionSection() {
                 </div>
               </div>
             ) : null}
-          </div>
+          </Fragment>
         ))}
       </div>
 
