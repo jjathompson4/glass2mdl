@@ -57,8 +57,8 @@ export default function About() {
           <p>
             This is visible-light physics for rendering and point-in-time calculations, not
             thermal or annual daylight analysis. Glass color is a physically sensible estimate
-            from your substrate choice unless the data sheet publishes color data, which you
-            can enter.
+            from your substrate choice. Accuracy can be improved by entering the color data
+            from a manufacturer data sheet.
           </p>
 
           <h2 className="pt-2 text-base font-semibold">Limitations, for now</h2>
