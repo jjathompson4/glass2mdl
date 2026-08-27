@@ -778,20 +778,116 @@ def _set_irp_params(mat, type_name, params):
     return set_count
 
 
+#: Envelope data from the last load_manifest() call that bind() needs beyond
+#: the type mapping: the roller wave entry and the export folder (where the
+#: bump map lives). Module-level so console users get the wiring for free.
+_manifest_extras = {"roller_wave": None, "dir": None}
+
+
 def load_manifest(path):
     """Read a bind_manifest.json from a glass2mdl volumetric export.
 
     Returns the factory-shaped mapping for make_iray_mdl_factory. Accepts both
     the shipped envelope ({"format": ..., "types": {...}}) and a bare mapping.
+    Also records the manifest's roller_wave entry and folder, which bind()
+    uses to wire the bump map into each material.
 
         ga.bind({"*gl-01*": "v5227_dgu"},
                 material_factory=ga.make_iray_mdl_factory(
                     ga.load_manifest(r"C:\\path\\to\\bind_manifest.json")))
     """
     import json
+    import os
     with open(path, "r", encoding="utf-8") as fh:
         data = json.load(fh)
+    _manifest_extras["roller_wave"] = data.get("roller_wave")
+    _manifest_extras["dir"] = os.path.dirname(os.path.abspath(path))
     return data.get("types", data)
+
+
+def _roller_wave_bitmap():
+    """One shared Max bitmap node for the manifest's roller wave bump map.
+
+    Returns (bitmap, depth_multiplier) or (None, 1.0) when the manifest has no
+    roller wave or the file is missing. The map is grayscale height (bright =
+    high); depth comes from the channel amount or the bitmap's output amount,
+    scaled per preset relative to "typical"."""
+    rw = _manifest_extras.get("roller_wave")
+    folder = _manifest_extras.get("dir")
+    if not rw or not folder:
+        return None, 1.0
+    import os
+    path = os.path.join(folder, str(rw.get("file", "roller_wave_bump.png")))
+    if not os.path.isfile(path):
+        print("g2m: roller wave map not found at %s (skipping the ripple)." % path)
+        return None, 1.0
+    mult = {"subtle": 0.4, "typical": 1.0, "strong": 1.9}.get(
+        str(rw.get("depth", "typical")), 1.0)
+    try:
+        bmp = rt.BitmapTexture()
+        try:
+            # Height data, not color: load without the display gamma curve.
+            bmp.bitmap = rt.openBitMap(path, gamma=1.0)
+        except Exception:  # noqa: BLE001
+            bmp.filename = path
+        bmp.name = "g2m roller wave"
+        return bmp, mult
+    except Exception as exc:  # noqa: BLE001
+        print("g2m: could not create the roller wave bitmap: %s" % exc)
+        return None, 1.0
+
+
+def _wire_roller_wave(mat, bmp, mult):
+    """Wire the bump map into the material's geometry normal map channel.
+
+    The Iray+ MDL material exposes Max-side geometry channels (opacity /
+    normal / displacement); the normal one is field-confirmed to distort
+    rendered reflections. Property names are probed rather than hard-coded so
+    plugin versions with different spellings still wire up. Returns
+    (wired, amount_set)."""
+    try:
+        names = [str(n) for n in rt.getPropNames(mat)]
+    except Exception:  # noqa: BLE001
+        names = []
+
+    def slot_score(n):
+        ln = n.lower()
+        if "normal" not in ln or "reflect" in ln:
+            return -1
+        if any(k in ln for k in ("amount", "strength", "factor", "enable", "_on")):
+            return -1
+        return 2 if "geometry" in ln else 1
+
+    best = None
+    for n in names:
+        s = slot_score(n)
+        if s > 0 and (best is None or s > best[0]):
+            best = (s, n)
+    if best is None:
+        return False, False
+    try:
+        rt.setProperty(mat, best[1], bmp)
+    except Exception as exc:  # noqa: BLE001
+        print("g2m: could not wire the roller wave map into '%s': %s" % (best[1], exc))
+        return False, False
+
+    amount_set = False
+    for n in names:
+        ln = n.lower()
+        if "normal" in ln and "reflect" not in ln and ("amount" in ln or "strength" in ln):
+            try:
+                rt.setProperty(mat, n, mult)
+                amount_set = True
+            except Exception:  # noqa: BLE001
+                pass
+    for n in names:
+        ln = n.lower()
+        if "normal" in ln and "reflect" not in ln and ("enable" in ln or ln.endswith("_on")):
+            try:
+                rt.setProperty(mat, n, True)
+            except Exception:  # noqa: BLE001
+                pass
+    return True, amount_set
 
 
 def make_iray_mdl_factory(manifest):
@@ -898,7 +994,7 @@ def _ensure_uv(obj):
     """Give a lite a predictable 1m x 1m box UV mapping (map channel 1) plus
     a per-object UV offset.
 
-    The exported roller wave normal map and frit patterns assume one UV unit
+    The exported roller wave bump map and frit patterns assume one UV unit
     equals one meter; the box map provides that. The offset is the
     variability: every object samples a different region of the shared maps,
     so no two lites carry the identical ripple. It is derived from the
@@ -959,6 +1055,11 @@ def bind(type_map=None, material_factory=None, add_uv=True):
         return
     multis = {}
     bound = unmatched = uv_mapped = 0
+    # One shared bitmap: every lite material gets the same map node, and the
+    # per-object UV offsets below are what keep the ripple varied.
+    roller_bmp, roller_mult = _roller_wave_bitmap() if material_factory else (None, 1.0)
+    roller_wired = 0
+    roller_amount_missing = False
     for obj in _tagged_objects():
         stamped = rt.getUserProp(obj, PROP_TYPE)
         prefix = str(stamped) if stamped not in (None, "", "undefined") else None
@@ -985,6 +1086,12 @@ def bind(type_map=None, material_factory=None, add_uv=True):
                 mm.names[i] = "%s face (ID%d)" % (slot, i + 1)
                 mat = material_factory(prefix, position, slot) if material_factory else None
                 mm.materialList[i] = mat
+                if mat is not None and roller_bmp is not None:
+                    wired, amount_set = _wire_roller_wave(mat, roller_bmp, roller_mult)
+                    if wired:
+                        roller_wired += 1
+                        if not amount_set:
+                            roller_amount_missing = True
             multis[key] = mm
         if add_uv and _ensure_uv(obj):
             uv_mapped += 1
@@ -995,6 +1102,25 @@ def bind(type_map=None, material_factory=None, add_uv=True):
     if add_uv:
         print("g2m: UV mapped %d lites (1m box map + per-object offset, so the"
               " roller wave varies lite to lite)." % uv_mapped)
+    if roller_bmp is not None:
+        if roller_wired:
+            print("g2m: wired the roller wave bump map into %d materials"
+                  " (geometry normal channel; the 'g2m roller wave' bitmap"
+                  " is visible in Slate)." % roller_wired)
+            if roller_amount_missing:
+                # No amount property found: fall back to scaling the map
+                # itself so the depth preset still lands.
+                try:
+                    roller_bmp.output.output_amount = roller_mult
+                    print("g2m: depth preset applied via the bitmap's Output"
+                          " Amount (%.2f); tweak it there." % roller_mult)
+                except Exception:  # noqa: BLE001
+                    print("g2m: no strength property found; adjust the ripple"
+                          " via the bitmap's Output rollout.")
+        else:
+            print("g2m: could not find the geometry normal channel; wire"
+                  " 'g2m roller wave' (%s) into it by hand in Slate."
+                  % _manifest_extras["roller_wave"].get("file", "roller_wave_bump.png"))
     if material_factory is None and multis:
         print("Slots are empty by design. Drag the glass2mdl materials from")
         print("the browser into each Multi-Sub once (per type, not per IGU):")
@@ -1285,9 +1411,11 @@ def show_gui():
     row3b.addStretch(1)
     lay3.addLayout(row3b)
     lbl_uv = QtWidgets.QLabel(
-        "Assigning also adds a 1 m UV map modifier so textures land at true "
-        "scale. Mapping only; the glass shape is untouched. Each object gets "
-        "a small offset so no two lites ripple alike.")
+        "Assigning also wires the roller wave bump map into each material's "
+        "geometry normal channel (find the 'g2m roller wave' bitmap in "
+        "Slate), and adds a 1 m UV map modifier so it lands at true scale. "
+        "Mapping only; the glass shape is untouched. Each object gets a "
+        "small offset so no two lites ripple alike.")
     lbl_uv.setWordWrap(True)
     lbl_uv.setStyleSheet("color: gray;")
     lay3.addWidget(lbl_uv)

@@ -7,7 +7,7 @@ import type { SolverWarning } from "../types/issues";
 import type { DerivedOptics } from "../types/optics";
 import { buildDerived, coatingLayer, compensateForLayer, provenanceComments } from "./common";
 import { lowerFrit } from "./frit";
-import { applyRollerWave } from "./rollerWave";
+import { rollerWaveTexture } from "./rollerWave";
 
 export interface SolveOutput {
   materials: MaterialIR[];
@@ -76,9 +76,9 @@ export function solvePlanar(input: GlazingSystemInput): SolveOutput {
 
   const textures: { fileName: string; bytes: Uint8Array }[] = [];
   if (input.rollerWave) {
-    textures.push(...applyRollerWave([material], input.rollerWave).textures);
+    textures.push(rollerWaveTexture());
     notes.push(
-      "Roller wave assumes 1 UV unit = 1 meter (a 1 m x 1 m UVW Map, or Real-World Map Size).",
+      "Roller wave: wire the bundled roller_wave_bump.png into the material's geometry normal channel in Max (see the README). Assumes 1 UV unit = 1 meter.",
     );
   }
 

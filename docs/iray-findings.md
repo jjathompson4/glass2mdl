@@ -197,17 +197,20 @@ A solid's `surface` covers the whole boundary, so an integrated frit lands on
    (cutsheets are normal-incidence only); one coating at a time; frit sits outside
    the optical fit (vision-area numbers are fitted, frit layered over the result);
    RGB per-channel until IGDB spectral import.
-6. **Never hand-build `texture_coordinate_info` for a normal map.** The struct's
-   `tangent_u`/`tangent_v` defaults are the constant vectors (1,0,0)/(0,1,0) —
-   not the surface tangents — so `base::tangent_space_normal_texture` perturbs
-   along a garbage frame. Field result: the first roller wave shipped this way
-   rendered completely flat at any strength (2026-08-27). Always obtain the
-   frame from `base::coordinate_source(texture_coordinate_uvw, 0)` and scale
-   through `base::transform_coordinate` (which carries tangents through) — the
-   idiom stock Iray materials use. Position-only construction stays fine for
-   plain color/mono lookups (the frit mask path), where tangents are unused.
-   Kit tests 09 + 11 isolate the remaining unknowns (texture decode vs the
-   `material_geometry.normal` slot) if it ever renders flat again.
+6. **`material_geometry.normal` in MDL source is DEAD in Iray+ 3.1 — use the
+   plugin's Max-side geometry channels instead.** Two independent emissions
+   rendered completely flat at any strength (2026-08-27): a hand-built
+   `texture_coordinate_info` frame AND the canonical
+   `coordinate_source`/`transform_coordinate` chain through
+   `base::tangent_space_normal_texture`. The slot is silently ignored, same
+   failure family as #1. What DOES work: the Iray+ MDL material node in Max
+   exposes three Max-side map channels — geometry opacity / geometry normal /
+   geometry displacement — and a hand-wired Noise map on **geometry normal**
+   visibly distorts rendered reflections (field-confirmed by Jeff,
+   2026-08-27). Roller wave therefore ships as a grayscale bump map that the
+   apply script wires into that channel (`_wire_roller_wave` probes the
+   property names). Never put normal perturbation back inside the MDL without
+   a render proving it; the export-bundle test enforces a clean module.
 
 ---
 

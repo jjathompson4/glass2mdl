@@ -172,7 +172,8 @@ export function ConstructionSection() {
         </div>
         <p className="mt-1.5 text-[11px] leading-snug text-muted/80">
           Real heat-treated glass carries a faint ripple from the tempering rollers; it is what
-          makes reflections read as glass. Ships as a normal map with the export.
+          makes reflections read as glass. Ships as a bump map the apply script wires into the
+          material for you.
         </p>
       </div>
     </Section>

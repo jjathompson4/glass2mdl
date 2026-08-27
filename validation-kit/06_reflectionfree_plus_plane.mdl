@@ -1,0 +1,66 @@
+mdl 1.6;
+
+import ::anno::*;
+import ::df::*;
+
+// Can a reflection-free solid plus a Fresnel plane replace normal glass?
+//
+// Setup: Box gets the reflection-free material; add a plane 0.1mm off each
+// face with the Fresnel material. Render beside test 07 under identical
+// lighting.
+//
+// Expected: Indistinguishable from test 07. If it matches, this structure
+// can carry a coating on exactly one face — including coatings that reflect
+// less than bare glass, which a plane layered over normal glass can never
+// do.
+
+// Refraction and absorption only - no surface reflection at all.
+// Reflection is supplied by the planes in 06b instead.
+
+export material test06_reflectionfree_solid()
+[[
+    anno::display_name("06a reflection-free solid"),
+    anno::description("06a reflection-free solid"),
+    anno::author("glass2mdl 0.1.0")
+]]
+= material(
+    thin_walled: false,
+    surface: material_surface(
+        scattering: df::specular_bsdf(
+            tint: color(1.0, 1.0, 1.0),
+            mode: df::scatter_transmit
+        )
+    ),
+    ior: color(1.52),
+    volume: material_volume(
+        absorption_coefficient: color(7.15125, 7.15125, 7.15125)
+    )
+);
+
+// Apply to planes 0.1mm off both large faces of the 06a box.
+
+export material test06_fresnel_plane()
+[[
+    anno::display_name("06b bare-glass Fresnel plane"),
+    anno::description("06b bare-glass Fresnel plane"),
+    anno::author("glass2mdl 0.1.0")
+]]
+= material(
+    thin_walled: true,
+    surface: material_surface(
+        scattering: df::custom_curve_layer(
+            normal_reflectivity: 0.04258,
+            grazing_reflectivity: 1.0,
+            exponent: 5.0,
+            layer: df::specular_bsdf(
+                tint: color(1.0, 1.0, 1.0),
+                mode: df::scatter_reflect
+            ),
+            base: df::specular_bsdf(
+                tint: color(1.0, 1.0, 1.0),
+                mode: df::scatter_transmit
+            )
+        )
+    ),
+    ior: color(1.52)
+);

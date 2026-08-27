@@ -1,0 +1,77 @@
+mdl 1.6;
+
+import ::anno::*;
+import ::df::*;
+
+// What happens when two Material IDs disagree about the volume?
+//
+// Setup: Same setup as test 03, but the two materials specify different
+// absorption. Note which one wins, or whether it breaks.
+//
+// Expected: Unknown — that is the point. Record whether the volume follows
+// the entry face, the first slot, blends, or renders incorrectly.
+// Determines whether test 03's approach is safe to rely on.
+
+// Assign to Material ID 1.
+// Nearly clear glass.
+
+export material test04_volume_clear()
+[[
+    anno::display_name("04a conflicting volume - clear (slot 1)"),
+    anno::description("04a conflicting volume - clear (slot 1)"),
+    anno::author("glass2mdl 0.1.0")
+]]
+= material(
+    thin_walled: false,
+    surface: material_surface(
+        scattering: df::custom_curve_layer(
+            normal_reflectivity: 0.04258,
+            grazing_reflectivity: 1.0,
+            exponent: 5.0,
+            layer: df::specular_bsdf(
+                tint: color(0.9, 0.1, 0.1),
+                mode: df::scatter_reflect
+            ),
+            base: df::specular_bsdf(
+                tint: color(1.0, 1.0, 1.0),
+                mode: df::scatter_transmit
+            )
+        )
+    ),
+    ior: color(1.52),
+    volume: material_volume(
+        absorption_coefficient: color(7.15125, 7.15125, 7.15125)
+    )
+);
+
+// Assign to Material ID 2.
+// Heavily absorbing - about 49% over 6mm.
+
+export material test04_volume_dark()
+[[
+    anno::display_name("04b conflicting volume - dark (slot 2)"),
+    anno::description("04b conflicting volume - dark (slot 2)"),
+    anno::author("glass2mdl 0.1.0")
+]]
+= material(
+    thin_walled: false,
+    surface: material_surface(
+        scattering: df::custom_curve_layer(
+            normal_reflectivity: 0.04258,
+            grazing_reflectivity: 1.0,
+            exponent: 5.0,
+            layer: df::specular_bsdf(
+                tint: color(0.1, 0.2, 0.9),
+                mode: df::scatter_reflect
+            ),
+            base: df::specular_bsdf(
+                tint: color(1.0, 1.0, 1.0),
+                mode: df::scatter_transmit
+            )
+        )
+    ),
+    ior: color(1.52),
+    volume: material_volume(
+        absorption_coefficient: color(120.0, 120.0, 120.0)
+    )
+);

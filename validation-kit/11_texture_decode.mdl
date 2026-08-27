@@ -1,0 +1,65 @@
+mdl 1.6;
+
+import ::anno::*;
+import ::base::*;
+import ::df::*;
+import ::math::*;
+import ::state::*;
+import ::tex::*;
+
+// Does the shipped roller_wave_normal.png decode in this build at all?
+//
+// Setup: Copy roller_wave_normal.png beside the .mdl. Apply to the 1m x 1m
+// plane with its 1.0m x 1.0m UVW Map and render flat-on. This wires the
+// SAME image into a visible color slot through the render-validated frit
+// mask path, so it isolates texture loading from everything the normal path
+// adds.
+//
+// Expected: Soft horizontal red banding with roughly a 300mm period (the
+// normal map's channels read as brightness). Uniform red with no banding
+// means Iray could not decode the shipped PNG, and no red at all means the
+// texture failed to load entirely.
+
+// Frit coverage from roller_wave_normal.png (white = frit).
+// Keep the image file next to this .mdl file.
+export float test11_map_value(uniform float scale = 1.0)
+{
+    return base::file_texture(
+        texture: texture_2d("./roller_wave_normal.png", tex::gamma_linear),
+        mono_source: base::mono_average,
+        uvw: base::texture_coordinate_info(
+            position: state::texture_coordinate(0) / scale
+        )
+    ).mono;
+}
+
+// Probe: red coverage is the normal map's mono average. Requires roller_wave_normal.png beside the module.
+
+export material test11_texture_decode(
+    uniform float frit_pattern_scale = 2.4
+        [[
+            anno::display_name("Frit pattern scale"),
+            anno::description("2.4 spreads one map tile over its true 2.4m span; leave as is.")
+        ]]
+)
+[[
+    anno::display_name("11 texture decode probe"),
+    anno::description("11 texture decode probe"),
+    anno::author("glass2mdl 0.1.0")
+]]
+= material(
+    thin_walled: true,
+    surface: material_surface(
+        scattering: df::weighted_layer(
+            weight: test11_map_value(frit_pattern_scale),
+            layer: df::diffuse_reflection_bsdf(
+                tint: color(0.9, 0.1, 0.1)
+            ),
+            base: df::specular_bsdf(
+                tint: color(1.0, 1.0, 1.0),
+                mode: df::scatter_transmit
+            )
+        )
+    ),
+    ior: color(1.52)
+);

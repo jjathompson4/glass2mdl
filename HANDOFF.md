@@ -121,27 +121,30 @@ so frit stays UV-based and coverage % is the spec.
    three unknowns still close against the three measurements. Unlocks
    per-lite volumetric fidelity for products like the V5227 TGU (#2 + #4);
    planar mode already reproduces such assemblies exactly.
-8. **Roller wave (2026-08-27, REBUILT after field failure — awaiting one
-   workstation render)** — every export ships `roller_wave_normal.png`
-   (deterministic 8-bit map, Sub-filtered PNG ~79KB, generated client-side by
-   `src/engine/mdl/emit/rollerWave.ts` + `package/png.ts`) wired into
-   `material_geometry.normal` via `base::tangent_space_normal_texture` with
-   the canonical `transform_coordinate(rotation_translation_scale(...),
-   coordinate_source(texture_coordinate_uvw, 0))` chain. The first shipped
-   version rendered flat at any strength; root cause candidates and the fix
-   are recorded in iray-findings §7.6 (hand-built `texture_coordinate_info`
-   leaves tangents at constant axis defaults). Ridge orientation is baked
-   into the map (wave along V = horizontal ridges, the installed norm); the
-   16-bit format and the axis-swap MDL helper are gone. On by default at
-   Typical (0.08mm/300mm); Off/Subtle/Typical/Strong in the Construction
-   card. Variability: the map's waves are internally varied, and the apply
-   script's Assign step adds a 1m box UVW Map plus a name-seeded UV offset
-   per lite so no two IGUs ripple identically. `roller_wave_strength`
-   (0 disables, typical default 0.00391) and `roller_wave_scale` flow through
-   the bind manifest. Validation kit: RENDER 11 (texture decode probe) AND 09
-   (the ripple) ON THE WORKSTATION before deploying — PROTOCOL.txt carries
-   the decision table; 10_object_variation (state::object_id probe, arity bug
-   fixed 2026-08-27) rides along.
+8. **Roller wave (2026-08-27, v3: Max-side bump map — awaiting one
+   workstation render)** — after TWO field failures proving
+   `material_geometry.normal` in MDL is silently ignored by Iray+ 3.1
+   (iray-findings §7.6), the ripple left the MDL entirely. Jeff's discovery
+   unblocked it: the Iray+ MDL material node in Max exposes Max-side map
+   channels (geometry opacity/normal/displacement), and a hand-wired Noise
+   map on geometry normal visibly distorts rendered reflections. Design now:
+   exports ship `roller_wave_bump.png` (512px grayscale height map, bright =
+   high, full-range normalized, deterministic, ~40KB;
+   `src/engine/mdl/emit/rollerWave.ts` + `package/png.ts`), the bind manifest
+   carries a top-level `roller_wave` entry ({file, depth, depth_mm, tile_m}),
+   and the apply script's Assign wires the map into every lite material's
+   geometry normal channel as a shared "g2m roller wave" bitmap — visible
+   and tweakable in Slate, which is the workflow Jeff wanted all along
+   (`_roller_wave_bitmap` + `_wire_roller_wave`; property names are probed,
+   depth presets scale a channel amount or the bitmap's Output Amount:
+   subtle 0.4 / typical 1.0 / strong 1.9 — PLACEHOLDER VALUES, calibrate
+   against Jeff's first render and bake his number in). The MDL is now
+   optics-only (export test enforces it); planar mode has no script, so the
+   README tells those users to wire the map by hand. UVW Map + name-seeded
+   per-object offsets still provide the lite-to-lite variability. Kit entry
+   renamed 09_object_variation (state::object_id probe; arity bug fixed).
+   GATE: one workstation render of a real export (fresh ZIP → Assign →
+   grazing reflection) before deploy, plus the strength calibration.
 
 9. **Workstation follow-ups** — the Iray+ API discovery and the apply-workflow
    validation are **done** (2026-08-25); the per-lite stacked render is **done**.

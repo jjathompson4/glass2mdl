@@ -1,0 +1,60 @@
+mdl 1.6;
+
+import ::anno::*;
+import ::df::*;
+
+// Is backface ignored on a solid, as the specification says?
+//
+// Setup: Apply to a closed box. View the exterior face, then the opposite
+// face.
+//
+// Expected: Both faces RED. BLUE anywhere means Iray honours backface on
+// solids after all — which would solve the coating problem outright and is
+// the single most valuable result in this kit.
+
+// Same material as test 01 but not thin-walled.
+// Expected: backface ignored, so both faces reflect RED.
+
+export material test02_solid_backface()
+[[
+    anno::display_name("02 solid backface"),
+    anno::description("02 solid backface"),
+    anno::author("glass2mdl 0.1.0")
+]]
+= material(
+    thin_walled: false,
+    surface: material_surface(
+        scattering: df::custom_curve_layer(
+            normal_reflectivity: 0.5,
+            grazing_reflectivity: 1.0,
+            exponent: 5.0,
+            layer: df::specular_bsdf(
+                tint: color(0.9, 0.1, 0.1),
+                mode: df::scatter_reflect
+            ),
+            base: df::specular_bsdf(
+                tint: color(1.0, 1.0, 1.0),
+                mode: df::scatter_transmit
+            )
+        )
+    ),
+    backface: material_surface(
+        scattering: df::custom_curve_layer(
+            normal_reflectivity: 0.5,
+            grazing_reflectivity: 1.0,
+            exponent: 5.0,
+            layer: df::specular_bsdf(
+                tint: color(0.1, 0.2, 0.9),
+                mode: df::scatter_reflect
+            ),
+            base: df::specular_bsdf(
+                tint: color(1.0, 1.0, 1.0),
+                mode: df::scatter_transmit
+            )
+        )
+    ),
+    ior: color(1.52),
+    volume: material_volume(
+        absorption_coefficient: color(7.15125, 7.15125, 7.15125)
+    )
+);

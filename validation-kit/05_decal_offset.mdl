@@ -1,0 +1,63 @@
+mdl 1.6;
+
+import ::anno::*;
+import ::df::*;
+
+// Does a thin decal sit cleanly on a solid?
+//
+// Setup: Place the plane 0.1mm off one face of a glass box and assign the
+// decal material. Look for z-fighting, shadow artefacts, and whether the
+// reflection reads correctly.
+//
+// Expected: GREEN reflection with no flicker or speckling. Frit already
+// depends on this working, so a failure here affects shipped output.
+
+// Apply to a plane offset 0.1mm from the glass face.
+
+export material test05_decal()
+[[
+    anno::display_name("05a decal plane"),
+    anno::description("05a decal plane"),
+    anno::author("glass2mdl 0.1.0")
+]]
+= material(
+    thin_walled: true,
+    surface: material_surface(
+        scattering: df::custom_curve_layer(
+            normal_reflectivity: 0.4,
+            grazing_reflectivity: 1.0,
+            exponent: 5.0,
+            layer: df::specular_bsdf(
+                tint: color(0.1, 0.8, 0.2),
+                mode: df::scatter_reflect
+            ),
+            base: df::specular_bsdf(
+                tint: color(1.0, 1.0, 1.0),
+                mode: df::scatter_transmit
+            )
+        )
+    ),
+    ior: color(1.52)
+);
+
+// Apply to the box the decal sits against.
+
+export material test05_host_glass()
+[[
+    anno::display_name("05b host glass solid"),
+    anno::description("05b host glass solid"),
+    anno::author("glass2mdl 0.1.0")
+]]
+= material(
+    thin_walled: false,
+    surface: material_surface(
+        scattering: df::specular_bsdf(
+            tint: color(1.0, 1.0, 1.0),
+            mode: df::scatter_reflect_transmit
+        )
+    ),
+    ior: color(1.52),
+    volume: material_volume(
+        absorption_coefficient: color(7.15125, 7.15125, 7.15125)
+    )
+);

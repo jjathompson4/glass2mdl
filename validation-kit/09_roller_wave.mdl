@@ -1,0 +1,75 @@
+mdl 1.6;
+
+import ::anno::*;
+import ::base::*;
+import ::df::*;
+import ::tex::*;
+
+// Does the roller wave normal map ripple reflections at true scale?
+//
+// Setup: Copy roller_wave_normal.png (emitted next to this kit) beside the
+// .mdl. Apply to a 1m x 1m plane AND to the closed box, both with a 1.0m x
+// 1.0m UVW Map. Set roller_wave_strength to 0.05 first so success is
+// unmistakable, then return it to the default. View a bright reflection at
+// a grazing angle.
+//
+// Expected: Reflections ripple in horizontal bands with roughly a 300mm
+// period, and the ripple visibly varies across the surface rather than
+// repeating a uniform sine. 0 turns the surface optically flat. If test 11
+// shows stripes but this stays flat at any strength,
+// material_geometry.normal is the broken link in this build (see the roller
+// wave decision table at the end).
+
+// Requires roller_wave_normal.png beside the module and a 1m x 1m UVW map.
+
+export material test09_roller_wave(
+    uniform float roller_wave_strength = 0.00391
+        [[
+            anno::display_name("Roller wave strength"),
+            anno::description("Default matches a typical 0.08mm wave; try 0.05 to exaggerate, 0 to disable.")
+        ]],
+    uniform float roller_wave_scale = 1.0
+        [[
+            anno::display_name("Roller wave scale"),
+            anno::description("Leave at 1.0 for this test.")
+        ]]
+)
+[[
+    anno::display_name("09 roller wave"),
+    anno::description("09 roller wave"),
+    anno::author("glass2mdl 0.1.0")
+]]
+= material(
+    thin_walled: false,
+    surface: material_surface(
+        scattering: df::custom_curve_layer(
+            normal_reflectivity: 0.15,
+            grazing_reflectivity: 1.0,
+            exponent: 5.0,
+            layer: df::specular_bsdf(
+                tint: color(1.0, 1.0, 1.0),
+                mode: df::scatter_reflect
+            ),
+            base: df::specular_bsdf(
+                tint: color(1.0, 1.0, 1.0),
+                mode: df::scatter_transmit
+            )
+        )
+    ),
+    ior: color(1.52),
+    geometry: material_geometry(
+        normal: base::tangent_space_normal_texture(
+            texture: texture_2d("./roller_wave_normal.png", tex::gamma_linear),
+            factor: roller_wave_strength,
+            uvw: base::transform_coordinate(
+                transform: base::rotation_translation_scale(
+                    scaling: float3(1.0 / (2.4 * roller_wave_scale))
+                ),
+                coordinate: base::coordinate_source(
+                    coordinate_system: base::texture_coordinate_uvw,
+                    texture_space: 0
+                )
+            )
+        )
+    )
+);

@@ -1,0 +1,57 @@
+mdl 1.6;
+
+import ::anno::*;
+import ::df::*;
+import ::math::*;
+import ::state::*;
+
+// Does a procedural frit pattern land at its true physical size?
+//
+// Setup: Apply to a 1m x 1m plane with a UVW Map modifier set to 1.0m x
+// 1.0m. Measure a dot and count the spacing.
+//
+// Expected: 6mm dots on 12mm centres — about 83 dots across one metre,
+// covering roughly 20% of the surface. A different size means the 1 UV unit
+// = 1 metre convention does not hold and the frit_pattern_scale default
+// needs changing.
+
+// Dot frit: 6mm dots on 12mm centres.
+// Coverage 19.6%.
+export float test08_dot_coverage(uniform float scale = 1.0)
+{
+    float pitch = 0.012 * scale;
+    float3 uvw = state::texture_coordinate(0);
+    float2 cell = float2(uvw.x, uvw.y) / pitch;
+    float2 offset = cell - float2(math::floor(cell.x), math::floor(cell.y)) - float2(0.5, 0.5);
+    float dist = math::length(offset) * pitch;
+    float radius = 0.003 * scale;
+    float edge = 0.00018 * scale;
+    return 1.0 - math::smoothstep(radius - edge, radius + edge, dist);
+}
+
+// 6mm dots on 12mm centres. Requires a 1m x 1m UVW map.
+
+export material test08_frit_pattern(
+    uniform float frit_pattern_scale = 1.0
+        [[
+            anno::display_name("Frit pattern scale"),
+            anno::description("Leave at 1.0 for this test.")
+        ]]
+)
+[[
+    anno::display_name("08 frit pattern scale"),
+    anno::description("08 frit pattern scale"),
+    anno::author("glass2mdl 0.1.0")
+]]
+= material(
+    thin_walled: true,
+    surface: material_surface(
+        scattering: df::diffuse_reflection_bsdf(
+            tint: color(1.0, 1.0, 1.0)
+        )
+    ),
+    ior: color(1.52),
+    geometry: material_geometry(
+        cutout_opacity: test08_dot_coverage(frit_pattern_scale)
+    )
+);

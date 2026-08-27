@@ -18,7 +18,6 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { zipSync, strToU8 } from "fflate";
-import { rollerWaveNormalMap } from "../src/engine/mdl/emit/rollerWave";
 import { emitModule } from "../src/engine/mdl/emit/module";
 import { absorptionCoefficient } from "../src/engine/physics/slab";
 import { AIR_GLASS_R0, GLASS_IOR } from "../src/engine/physics/constants";
@@ -256,40 +255,7 @@ const ENTRIES: KitEntry[] = [
     ],
   },
   {
-    slug: "09_roller_wave",
-    title: "Does the roller wave normal map ripple reflections at true scale?",
-    question:
-      "Copy roller_wave_normal.png (emitted next to this kit) beside the .mdl. Apply to a 1m x 1m plane AND to the closed box, both with a 1.0m x 1.0m UVW Map. Set roller_wave_strength to 0.05 first so success is unmistakable, then return it to the default. View a bright reflection at a grazing angle.",
-    expected:
-      "Reflections ripple in horizontal bands with roughly a 300mm period, and the ripple visibly varies across the surface rather than repeating a uniform sine. 0 turns the surface optically flat. If test 11 shows stripes but this stays flat at any strength, material_geometry.normal is the broken link in this build (see the roller wave decision table at the end).",
-    materials: [
-      material({
-        name: "test09_roller_wave",
-        displayName: "09 roller wave",
-        layers: [coating(0.15, WHITE), glassBase("transmit")],
-        normalMap: { textureFileName: "roller_wave_normal.png" },
-        params: [
-          {
-            name: "roller_wave_strength",
-            type: "float",
-            defaultValue: 0.00391,
-            displayName: "Roller wave strength",
-            description: "Default matches a typical 0.08mm wave; try 0.05 to exaggerate, 0 to disable.",
-          },
-          {
-            name: "roller_wave_scale",
-            type: "float",
-            defaultValue: 1,
-            displayName: "Roller wave scale",
-            description: "Leave at 1.0 for this test.",
-          },
-        ],
-        comments: ["Requires roller_wave_normal.png beside the module and a 1m x 1m UVW map."],
-      }),
-    ],
-  },
-  {
-    slug: "10_object_variation",
+    slug: "09_object_variation",
     title: "Does state::object_id() give materials per-object identity?",
     question:
       "Apply this one material to four or more separate boxes and render.",
@@ -297,11 +263,11 @@ const ENTRIES: KitEntry[] = [
       "Each box shows a DIFFERENT red coverage level. Identical levels on every box mean object_id is constant in this build, and per-object variation must keep coming from the apply script's UV offsets (the current approach) rather than from inside the material.",
     materials: [
       material({
-        name: "test10_object_variation",
-        displayName: "10 object id probe",
+        name: "test09_object_variation",
+        displayName: "09 object id probe",
         thinWalled: true,
         layers: [
-          { kind: "frit", color: RED, opacity: 1, weight: { kind: "function", functionName: "test10_object_value" } },
+          { kind: "frit", color: RED, opacity: 1, weight: { kind: "function", functionName: "test09_object_value" } },
           glassBase("transmit"),
         ],
         params: [
@@ -313,40 +279,8 @@ const ENTRIES: KitEntry[] = [
             description: "Unused by this probe; leave at 1.0.",
           },
         ],
-        moduleFunctions: [{ kind: "object-id-probe", name: "test10_object_value" }],
+        moduleFunctions: [{ kind: "object-id-probe", name: "test09_object_value" }],
         comments: ["Probe: red coverage is math::frac(object_id * phi)."],
-      }),
-    ],
-  },
-  {
-    slug: "11_texture_decode",
-    title: "Does the shipped roller_wave_normal.png decode in this build at all?",
-    question:
-      "Copy roller_wave_normal.png beside the .mdl. Apply to the 1m x 1m plane with its 1.0m x 1.0m UVW Map and render flat-on. This wires the SAME image into a visible color slot through the render-validated frit mask path, so it isolates texture loading from everything the normal path adds.",
-    expected:
-      "Soft horizontal red banding with roughly a 300mm period (the normal map's channels read as brightness). Uniform red with no banding means Iray could not decode the shipped PNG, and no red at all means the texture failed to load entirely.",
-    materials: [
-      material({
-        name: "test11_texture_decode",
-        displayName: "11 texture decode probe",
-        thinWalled: true,
-        layers: [
-          { kind: "frit", color: RED, opacity: 1, weight: { kind: "function", functionName: "test11_map_value" } },
-          glassBase("transmit"),
-        ],
-        params: [
-          {
-            name: "frit_pattern_scale",
-            type: "float",
-            defaultValue: 2.4,
-            displayName: "Frit pattern scale",
-            description: "2.4 spreads one map tile over its true 2.4m span; leave as is.",
-          },
-        ],
-        moduleFunctions: [
-          { kind: "texture-mask", name: "test11_map_value", textureFileName: "roller_wave_normal.png" },
-        ],
-        comments: ["Probe: red coverage is the normal map's mono average. Requires roller_wave_normal.png beside the module."],
       }),
     ],
   },
@@ -438,16 +372,13 @@ function buildProtocol(): string {
     "  Else                                         -> single coating plane and",
     "    a documented 1-2 point reflectance error on low-e products.",
     "",
-    "ROLLER WAVE DECISION (tests 09 and 11 together)",
-    "-----------------------------------------------",
-    "  11 shows banding, 09 ripples       -> the feature works; ship it.",
-    "  11 shows banding, 09 stays flat    -> the texture is fine but",
-    "    material_geometry.normal is dead in this build; the fix is moving the",
-    "    perturbed normal onto the BSDF layers' own normal parameter.",
-    "  11 shows uniform red, no banding   -> Iray cannot decode the shipped",
-    "    PNG; the file format needs changing.",
-    "  11 shows no red at all             -> the texture file was not found;",
-    "    check it sits beside the .mdl.",
+    "ROLLER WAVE (not an MDL test anymore)",
+    "-------------------------------------",
+    "material_geometry.normal inside MDL is dead in this build (two field",
+    "failures, 2026-08-27), but the Iray+ material's own Max-side 'geometry",
+    "normal' map channel works (field-confirmed with a Noise map). The roller",
+    "wave therefore ships as a bump map the apply script wires into that",
+    "channel; nothing about it lives in these modules.",
     "",
   );
 
@@ -484,8 +415,6 @@ function main(): void {
   }
 
   files[`${folder}/PROTOCOL.txt`] = strToU8(buildProtocol());
-  // Test 09 samples this map; it ships in the kit like it ships in exports.
-  files[`${folder}/roller_wave_normal.png`] = rollerWaveNormalMap();
 
   mkdirSync(OUT_DIR, { recursive: true });
 

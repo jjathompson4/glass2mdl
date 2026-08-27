@@ -1,0 +1,78 @@
+mdl 1.6;
+
+import ::anno::*;
+import ::df::*;
+
+// Do Material IDs give a solid's faces different surfaces?
+//
+// Setup: One box. Material ID 1 on the exterior face, ID 2 on the opposite
+// face. Assign these two as a Multi-Sub-Object. Volume absorption is
+// identical in both.
+//
+// Expected: Exterior face RED, opposite face BLUE, and the glass still
+// absorbs (a thick sample should darken). This is the key test: if it
+// passes, coated lites need no extra geometry at all.
+
+// Assign to Material ID 1 - the exterior face.
+// Reflects RED at about 4%.
+
+export material test03_faceid_bare()
+[[
+    anno::display_name("03a face ID - bare (slot 1)"),
+    anno::description("03a face ID - bare (slot 1)"),
+    anno::author("glass2mdl 0.1.0")
+]]
+= material(
+    thin_walled: false,
+    surface: material_surface(
+        scattering: df::custom_curve_layer(
+            normal_reflectivity: 0.04258,
+            grazing_reflectivity: 1.0,
+            exponent: 5.0,
+            layer: df::specular_bsdf(
+                tint: color(0.9, 0.1, 0.1),
+                mode: df::scatter_reflect
+            ),
+            base: df::specular_bsdf(
+                tint: color(1.0, 1.0, 1.0),
+                mode: df::scatter_transmit
+            )
+        )
+    ),
+    ior: color(1.52),
+    volume: material_volume(
+        absorption_coefficient: color(7.15125, 7.15125, 7.15125)
+    )
+);
+
+// Assign to Material ID 2 - the gap-facing face.
+// Reflects BLUE at 35%.
+
+export material test03_faceid_coated()
+[[
+    anno::display_name("03b face ID - coated (slot 2)"),
+    anno::description("03b face ID - coated (slot 2)"),
+    anno::author("glass2mdl 0.1.0")
+]]
+= material(
+    thin_walled: false,
+    surface: material_surface(
+        scattering: df::custom_curve_layer(
+            normal_reflectivity: 0.35,
+            grazing_reflectivity: 1.0,
+            exponent: 5.0,
+            layer: df::specular_bsdf(
+                tint: color(0.1, 0.2, 0.9),
+                mode: df::scatter_reflect
+            ),
+            base: df::specular_bsdf(
+                tint: color(1.0, 1.0, 1.0),
+                mode: df::scatter_transmit
+            )
+        )
+    ),
+    ior: color(1.52),
+    volume: material_volume(
+        absorption_coefficient: color(7.15125, 7.15125, 7.15125)
+    )
+);

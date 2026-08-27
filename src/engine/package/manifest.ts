@@ -1,4 +1,9 @@
 import { INTERIOR_FACE_PARAM } from "../mdl/emit/layers";
+import {
+  ROLLER_WAVE_DEPTH_MM,
+  ROLLER_WAVE_FILE,
+  ROLLER_WAVE_TILE_METERS,
+} from "../mdl/emit/rollerWave";
 import { litePositionNames, toIdentifier } from "../mdl/naming";
 import type { MaterialIR } from "../types/ir";
 import type { GlazingSystemInput } from "../types/system";
@@ -82,13 +87,24 @@ export function buildBindManifest(
     };
   }
 
-  const manifest = {
+  const manifest: Record<string, unknown> = {
     format: "glass2mdl-bind-manifest",
     version: 1,
     module: names.module,
     note: "type_name values assume the export folder sits directly on an Iray+ MDL search path. Lite position keys match the apply script's g2m_position stamps. The module filename carries a content revision, so re-exports never collide with modules 3ds Max has already cached.",
     types: { [prefix]: typeEntry },
   };
+
+  // The ripple is Max-side texturing, not MDL: the apply script wires this
+  // file into each lite material's geometry normal channel.
+  if (input.rollerWave) {
+    manifest.roller_wave = {
+      file: ROLLER_WAVE_FILE,
+      depth: input.rollerWave.depth,
+      depth_mm: ROLLER_WAVE_DEPTH_MM[input.rollerWave.depth],
+      tile_m: ROLLER_WAVE_TILE_METERS,
+    };
+  }
 
   return `${JSON.stringify(manifest, null, 2)}\n`;
 }

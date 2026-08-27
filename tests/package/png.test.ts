@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { unzipSync, unzlibSync } from "fflate";
 import { encodePngRgb8, encodePngRgb16 } from "@/engine/package/png";
-import { rollerWaveNormalMap } from "@/engine/mdl/emit/rollerWave";
 
 /** Pull the inflated raw stream (filter bytes + samples) out of a PNG. */
 function rawStream(png: Uint8Array): { width: number; height: number; raw: Uint8Array } {
@@ -80,61 +79,71 @@ describe("deterministic PNG encoder", () => {
   });
 });
 
-describe("roller wave normal map", () => {
-  it("is byte-for-byte deterministic", () => {
-    // Same reference from the memo cache; determinism itself is proven by the
-    // golden revision codes, which hash these bytes.
-    expect(rollerWaveNormalMap()).toBe(rollerWaveNormalMap());
-    expect(rollerWaveNormalMap().length).toBeGreaterThan(10_000);
-  });
-
-  it("decodes to plausible normal-map pixels with the wave along V", () => {
-    const png = rollerWaveNormalMap();
+describe("roller wave map generation", () => {
+  it("is a deterministic grayscale height map spanning the full range", async () => {
+    const { rollerWaveBumpMap } = await import("@/engine/mdl/emit/rollerWave");
+    expect(rollerWaveBumpMap()).toBe(rollerWaveBumpMap()); // memoized
+    const png = rollerWaveBumpMap();
     const { width, height, raw } = rawStream(png);
     expect(width).toBe(512);
     expect(height).toBe(512);
-    expect(png[24]).toBe(8); // 8-bit: the format every loader reads
+    expect(png[24]).toBe(8);
 
     const samples = unfilter(raw, width, height, 3);
-    let rMin = 255, rMax = 0, gMin = 255, gMax = 0, bMin = 255;
+    let min = 255;
+    let max = 0;
     for (let i = 0; i < samples.length; i += 3) {
-      rMin = Math.min(rMin, samples[i]);
-      rMax = Math.max(rMax, samples[i]);
-      gMin = Math.min(gMin, samples[i + 1]);
-      gMax = Math.max(gMax, samples[i + 1]);
-      bMin = Math.min(bMin, samples[i + 2]);
+      // Grayscale: a bump map, not a color image.
+      expect(samples[i + 1]).toBe(samples[i]);
+      expect(samples[i + 2]).toBe(samples[i]);
+      min = Math.min(min, samples[i]);
+      max = Math.max(max, samples[i]);
     }
-    // Z stays near 1 (the perturbation is a tilt, not a cliff).
-    expect(bMin).toBeGreaterThan(230);
-    // The wave varies along V, so the strong signal lives in G...
-    expect(gMin).toBeLessThan(105);
-    expect(gMax).toBeGreaterThan(150);
-    // ...and R carries only the mild cross-wave irregularity.
-    expect(rMin).toBeGreaterThan(100);
-    expect(rMax).toBeLessThan(165);
-    expect(rMax - rMin).toBeGreaterThan(2); // but it is not constant
+    // Normalized to full range: depth control lives on the Max side.
+    expect(min).toBe(0);
+    expect(max).toBe(255);
   });
 });
 
 describe("roller wave in the export bundle", () => {
-  it("ships the map in both modes when enabled, and not otherwise", async () => {
+  it("ships the bump map and wiring info, and keeps the MDL clean", async () => {
     const { buildExport } = await import("@/engine/package/exportBundle");
     const { rollerWaveIgu, solarban60 } = await import("../mdl/fixtures");
 
     for (const mode of ["planar", "volumetric"] as const) {
       const withWave = unzipSync(buildExport(rollerWaveIgu, mode).zip);
-      expect(Object.keys(withWave).some((p) => p.endsWith("roller_wave_normal.png"))).toBe(true);
+      expect(Object.keys(withWave).some((p) => p.endsWith("roller_wave_bump.png"))).toBe(true);
       const mdlEntry = Object.entries(withWave).find(([p]) => p.endsWith(".mdl"))!;
       const source = new TextDecoder().decode(mdlEntry[1]);
-      expect(source).toContain("tangent_space_normal_texture");
-      expect(source).toContain('texture_2d("./roller_wave_normal.png"');
-      expect(source).toContain("coordinate_source");
-      // The tangent-frame trap: never hand-build texture_coordinate_info for
-      // a normal map (its tangent defaults are constant axis vectors).
-      expect(source).not.toContain("texture_coordinate_info(position: ");
+      // The ripple is Max-side texturing: the MDL must stay out of it
+      // (comments may mention the file; code must not). material_geometry's
+      // normal is silently ignored by Iray+ 3.1 (iray-findings 7.6) and must
+      // never come back without a render proving it.
+      expect(source).not.toContain("roller_wave_strength");
+      expect(source).not.toContain("tangent_space_normal_texture");
+      expect(source).not.toContain("normal: ");
+
+      if (mode === "volumetric") {
+        const manifestEntry = Object.entries(withWave).find(([p]) =>
+          p.endsWith("bind_manifest.json"),
+        )!;
+        const manifest = JSON.parse(new TextDecoder().decode(manifestEntry[1]));
+        expect(manifest.roller_wave).toEqual({
+          file: "roller_wave_bump.png",
+          depth: "typical",
+          depth_mm: 0.08,
+          tile_m: 2.4,
+        });
+      }
 
       const without = unzipSync(buildExport(solarban60, mode).zip);
-      expect(Object.keys(without).some((p) => p.endsWith("roller_wave_normal.png"))).toBe(false);
+      expect(Object.keys(without).some((p) => p.endsWith("roller_wave_bump.png"))).toBe(false);
+      if (mode === "volumetric") {
+        const manifestEntry = Object.entries(without).find(([p]) =>
+          p.endsWith("bind_manifest.json"),
+        )!;
+        expect(JSON.parse(new TextDecoder().decode(manifestEntry[1])).roller_wave).toBeUndefined();
+      }
     }
   });
 });

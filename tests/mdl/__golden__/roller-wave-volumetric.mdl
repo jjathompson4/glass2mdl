@@ -1,9 +1,7 @@
 mdl 1.6;
 
 import ::anno::*;
-import ::base::*;
 import ::df::*;
-import ::tex::*;
 
 // glass2mdl 0.1.0 — MDL 1.6
 // Roller wave IGU — volumetric export
@@ -32,23 +30,12 @@ import ::tex::*;
 //   - Absorption is per meter of travel, so the solid's real thickness must match the value above.
 //   - Coating fitted for surface #2. Assign this material to the solid's face Material IDs: ID 1 = exterior face (interior_face off), ID 2 = cavity/interior face (interior_face on), ID 3 = edges (off). The bundled bind_manifest.json and the glass2mdl Max apply script automate the assignment.
 //   - The volume carries the coating's absorption as well as the glass body's - the fitted faces only reflect and pass, so the divergence from the nominal body transmittance is intentional.
-// Roller wave (typical) ships as roller_wave_normal.png; roller_wave_strength tunes it and 0 disables. Assumes 1 UV unit = 1 meter.
 
 export material roller_wave_igu_outer(
     uniform bool interior_face = false
         [[
             anno::display_name("Interior face"),
             anno::description("Off for the exterior-facing face (Material ID 1) and edges (ID 3); on for the cavity/interior-facing face (Material ID 2).")
-        ]],
-    uniform float roller_wave_strength = 0.00391
-        [[
-            anno::display_name("Roller wave strength"),
-            anno::description("Heat-treatment ripple. Default matches the typical preset (0.08mm peak-to-valley over 300mm); set 0 for optically flat glass.")
-        ]],
-    uniform float roller_wave_scale = 1.0
-        [[
-            anno::display_name("Roller wave scale"),
-            anno::description("Multiplies the wave's physical size. Leave at 1.0 when the object uses a 1 m x 1 m UVW map.")
         ]]
 )
 [[
@@ -76,21 +63,6 @@ export material roller_wave_igu_outer(
     ior: color(1.52),
     volume: material_volume(
         absorption_coefficient: color(27.102851, 23.728561, 28.348168)
-    ),
-    geometry: material_geometry(
-        normal: base::tangent_space_normal_texture(
-            texture: texture_2d("./roller_wave_normal.png", tex::gamma_linear),
-            factor: roller_wave_strength,
-            uvw: base::transform_coordinate(
-                transform: base::rotation_translation_scale(
-                    scaling: float3(1.0 / (2.4 * roller_wave_scale))
-                ),
-                coordinate: base::coordinate_source(
-                    coordinate_system: base::texture_coordinate_uvw,
-                    texture_space: 0
-                )
-            )
-        )
     )
 );
 
@@ -113,23 +85,12 @@ export material roller_wave_igu_outer(
 // Notes:
 //   - Apply to lite 2 of 2, modeled as a 6mm thick solid.
 //   - Absorption is per meter of travel, so the solid's real thickness must match the value above.
-// Roller wave (typical) ships as roller_wave_normal.png; roller_wave_strength tunes it and 0 disables. Assumes 1 UV unit = 1 meter.
 
 export material roller_wave_igu_inner(
     uniform float ior = 1.52
         [[
             anno::display_name("Index of refraction"),
             anno::description("Drives the real Fresnel split and refraction. 1.52 is architectural float glass.")
-        ]],
-    uniform float roller_wave_strength = 0.00391
-        [[
-            anno::display_name("Roller wave strength"),
-            anno::description("Heat-treatment ripple. Default matches the typical preset (0.08mm peak-to-valley over 300mm); set 0 for optically flat glass.")
-        ]],
-    uniform float roller_wave_scale = 1.0
-        [[
-            anno::display_name("Roller wave scale"),
-            anno::description("Multiplies the wave's physical size. Leave at 1.0 when the object uses a 1 m x 1 m UVW map.")
         ]]
 )
 [[
@@ -148,20 +109,5 @@ export material roller_wave_igu_inner(
     ior: color(ior),
     volume: material_volume(
         absorption_coefficient: color(9.428392, 5.937863, 10.312567)
-    ),
-    geometry: material_geometry(
-        normal: base::tangent_space_normal_texture(
-            texture: texture_2d("./roller_wave_normal.png", tex::gamma_linear),
-            factor: roller_wave_strength,
-            uvw: base::transform_coordinate(
-                transform: base::rotation_translation_scale(
-                    scaling: float3(1.0 / (2.4 * roller_wave_scale))
-                ),
-                coordinate: base::coordinate_source(
-                    coordinate_system: base::texture_coordinate_uvw,
-                    texture_space: 0
-                )
-            )
-        )
     )
 );

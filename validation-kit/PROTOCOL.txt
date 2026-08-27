@@ -1,0 +1,277 @@
+IRAY VALIDATION KIT
+===================
+
+Every material glass2mdl generates has been checked against the MDL
+specification and never against a compiler. These samples answer the
+questions that reading cannot, and one of them is currently blocking work:
+how to give the two faces of a solid pane different surfaces.
+
+SCENE SETUP
+-----------
+Use one scene for everything so results stay comparable.
+
+  - Environment: uniform white, intensity 1.0, no HDRI. A flat environment
+    means a reflected fraction reads directly off the rendered pixel.
+  - Camera: perpendicular to the sample, filling most of the frame.
+  - Samples: enough to converge cleanly - noise reads as colour error.
+  - Backdrop: matte black behind the sample, so transmitted light does not
+    come back and contaminate the reflectance reading.
+  - Units: scene in metres. Absorption is per metre and a mis-scaled scene
+    changes the answer.
+
+Geometry needed:
+  - A flat plane, 1m x 1m, with a 1.0m x 1.0m UVW Map modifier.
+  - A closed box 1m x 1m x 6mm, for the solid tests.
+  - A second box with Material IDs 1 and 2 assigned to opposite large faces.
+
+INSTALLING
+----------
+Unpack this folder somewhere on an MDL search path in Iray for 3ds Max,
+then load each module from the material browser.
+
+WHAT TO RECORD
+--------------
+For each test: whether it loaded, what you saw, and any Iray log warnings
+even when the render looked right. Copy the results table at the bottom
+into docs/mdl-compat.md when you are done.
+
+------------------------------------------------------------------------
+TEST 01: Does backface work on a thin-walled material?
+File: 01_thinwalled_backface.mdl
+
+  Setup:
+    Apply to a single flat plane. View it from the front, then from
+    behind.
+
+  Expected:
+    RED from the front, BLUE from behind. If both sides look the
+    same, backface is not being honoured and the planar export's
+    interior reflectance is wrong.
+
+  Materials:
+    test01_thinwalled_backface  (01 thin-walled backface)
+
+------------------------------------------------------------------------
+TEST 02: Is backface ignored on a solid, as the specification says?
+File: 02_solid_backface.mdl
+
+  Setup:
+    Apply to a closed box. View the exterior face, then the
+    opposite face.
+
+  Expected:
+    Both faces RED. BLUE anywhere means Iray honours backface on
+    solids after all — which would solve the coating problem
+    outright and is the single most valuable result in this kit.
+
+  Materials:
+    test02_solid_backface  (02 solid backface)
+
+------------------------------------------------------------------------
+TEST 03: Do Material IDs give a solid's faces different surfaces?
+File: 03_faceid_same_volume.mdl
+
+  Setup:
+    One box. Material ID 1 on the exterior face, ID 2 on the
+    opposite face. Assign these two as a Multi-Sub-Object. Volume
+    absorption is identical in both.
+
+  Expected:
+    Exterior face RED, opposite face BLUE, and the glass still
+    absorbs (a thick sample should darken). This is the key test:
+    if it passes, coated lites need no extra geometry at all.
+
+  Materials:
+    test03_faceid_bare  (03a face ID - bare (slot 1))
+    test03_faceid_coated  (03b face ID - coated (slot 2))
+
+------------------------------------------------------------------------
+TEST 04: What happens when two Material IDs disagree about the volume?
+File: 04_faceid_conflicting_volume.mdl
+
+  Setup:
+    Same setup as test 03, but the two materials specify different
+    absorption. Note which one wins, or whether it breaks.
+
+  Expected:
+    Unknown — that is the point. Record whether the volume follows
+    the entry face, the first slot, blends, or renders incorrectly.
+    Determines whether test 03's approach is safe to rely on.
+
+  Materials:
+    test04_volume_clear  (04a conflicting volume - clear (slot 1))
+    test04_volume_dark  (04b conflicting volume - dark (slot 2))
+
+------------------------------------------------------------------------
+TEST 05: Does a thin decal sit cleanly on a solid?
+File: 05_decal_offset.mdl
+
+  Setup:
+    Place the plane 0.1mm off one face of a glass box and assign
+    the decal material. Look for z-fighting, shadow artefacts, and
+    whether the reflection reads correctly.
+
+  Expected:
+    GREEN reflection with no flicker or speckling. Frit already
+    depends on this working, so a failure here affects shipped
+    output.
+
+  Materials:
+    test05_decal  (05a decal plane)
+    test05_host_glass  (05b host glass solid)
+
+------------------------------------------------------------------------
+TEST 06: Can a reflection-free solid plus a Fresnel plane replace normal glass?
+File: 06_reflectionfree_plus_plane.mdl
+
+  Setup:
+    Box gets the reflection-free material; add a plane 0.1mm off
+    each face with the Fresnel material. Render beside test 07
+    under identical lighting.
+
+  Expected:
+    Indistinguishable from test 07. If it matches, this structure
+    can carry a coating on exactly one face — including coatings
+    that reflect less than bare glass, which a plane layered over
+    normal glass can never do.
+
+  Materials:
+    test06_reflectionfree_solid  (06a reflection-free solid)
+    test06_fresnel_plane  (06b bare-glass Fresnel plane)
+
+------------------------------------------------------------------------
+TEST 07: Control: ordinary 6mm clear glass
+File: 07_reference_glass.mdl
+
+  Setup:
+    Apply to a 6mm-thick box. Everything else is compared against
+    this.
+
+  Expected:
+    About 8% reflectance and 88% transmittance measured at normal
+    incidence.
+
+  Materials:
+    test07_reference_glass  (07 reference 6mm clear)
+
+------------------------------------------------------------------------
+TEST 08: Does a procedural frit pattern land at its true physical size?
+File: 08_frit_pattern_scale.mdl
+
+  Setup:
+    Apply to a 1m x 1m plane with a UVW Map modifier set to 1.0m x
+    1.0m. Measure a dot and count the spacing.
+
+  Expected:
+    6mm dots on 12mm centres — about 83 dots across one metre,
+    covering roughly 20% of the surface. A different size means the
+    1 UV unit = 1 metre convention does not hold and the
+    frit_pattern_scale default needs changing.
+
+  Materials:
+    test08_frit_pattern  (08 frit pattern scale)
+
+------------------------------------------------------------------------
+TEST 09: Does the roller wave normal map ripple reflections at true scale?
+File: 09_roller_wave.mdl
+
+  Setup:
+    Copy roller_wave_normal.png (emitted next to this kit) beside
+    the .mdl. Apply to a 1m x 1m plane AND to the closed box, both
+    with a 1.0m x 1.0m UVW Map. Set roller_wave_strength to 0.05
+    first so success is unmistakable, then return it to the
+    default. View a bright reflection at a grazing angle.
+
+  Expected:
+    Reflections ripple in horizontal bands with roughly a 300mm
+    period, and the ripple visibly varies across the surface rather
+    than repeating a uniform sine. 0 turns the surface optically
+    flat. If test 11 shows stripes but this stays flat at any
+    strength, material_geometry.normal is the broken link in this
+    build (see the roller wave decision table at the end).
+
+  Materials:
+    test09_roller_wave  (09 roller wave)
+
+------------------------------------------------------------------------
+TEST 10: Does state::object_id() give materials per-object identity?
+File: 10_object_variation.mdl
+
+  Setup:
+    Apply this one material to four or more separate boxes and
+    render.
+
+  Expected:
+    Each box shows a DIFFERENT red coverage level. Identical levels
+    on every box mean object_id is constant in this build, and
+    per-object variation must keep coming from the apply script's
+    UV offsets (the current approach) rather than from inside the
+    material.
+
+  Materials:
+    test10_object_variation  (10 object id probe)
+
+------------------------------------------------------------------------
+TEST 11: Does the shipped roller_wave_normal.png decode in this build at all?
+File: 11_texture_decode.mdl
+
+  Setup:
+    Copy roller_wave_normal.png beside the .mdl. Apply to the 1m x
+    1m plane with its 1.0m x 1.0m UVW Map and render flat-on. This
+    wires the SAME image into a visible color slot through the
+    render-validated frit mask path, so it isolates texture loading
+    from everything the normal path adds.
+
+  Expected:
+    Soft horizontal red banding with roughly a 300mm period (the
+    normal map's channels read as brightness). Uniform red with no
+    banding means Iray could not decode the shipped PNG, and no red
+    at all means the texture failed to load entirely.
+
+  Materials:
+    test11_texture_decode  (11 texture decode probe)
+
+========================================================================
+RESULTS
+
+Test  Loaded  Matched expectation  Notes
+01    [ ]     [ ]                  01_thinwalled_backface
+02    [ ]     [ ]                  02_solid_backface
+03    [ ]     [ ]                  03_faceid_same_volume
+04    [ ]     [ ]                  04_faceid_conflicting_volume
+05    [ ]     [ ]                  05_decal_offset
+06    [ ]     [ ]                  06_reflectionfree_plus_plane
+07    [ ]     [ ]                  07_reference_glass
+08    [ ]     [ ]                  08_frit_pattern_scale
+09    [ ]     [ ]                  09_roller_wave
+10    [ ]     [ ]                  10_object_variation
+11    [ ]     [ ]                  11_texture_decode
+
+Iray for 3ds Max version: ______________
+3ds Max version: ______________
+Date: ______________
+
+DECISION THIS KIT UNBLOCKS
+--------------------------
+Volumetric export of coated glazing is currently refused, because a
+coating meant for surface #2 would also appear on #1.
+
+  If test 02 shows backface working on solids  -> use backface; no extra
+    geometry, no extra planes, problem gone.
+  Else if tests 03 and 04 both pass            -> use Material IDs; still
+    no extra geometry, but the setup instructions grow.
+  Else if test 06 matches test 07              -> reflection-free solid
+    plus two planes; exact, at the cost of geometry the user must build.
+  Else                                         -> single coating plane and
+    a documented 1-2 point reflectance error on low-e products.
+
+ROLLER WAVE DECISION (tests 09 and 11 together)
+-----------------------------------------------
+  11 shows banding, 09 ripples       -> the feature works; ship it.
+  11 shows banding, 09 stays flat    -> the texture is fine but
+    material_geometry.normal is dead in this build; the fix is moving the
+    perturbed normal onto the BSDF layers' own normal parameter.
+  11 shows uniform red, no banding   -> Iray cannot decode the shipped
+    PNG; the file format needs changing.
+  11 shows no red at all             -> the texture file was not found;
+    check it sits beside the .mdl.

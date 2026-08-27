@@ -1,9 +1,7 @@
 mdl 1.6;
 
 import ::anno::*;
-import ::base::*;
 import ::df::*;
-import ::tex::*;
 
 // glass2mdl 0.1.0 — MDL 1.6
 // Roller wave IGU — planar export
@@ -30,21 +28,9 @@ import ::tex::*;
 // Notes:
 //   - Apply to a single flat surface with no thickness. Do not use on a solid.
 //   - Interior appearance comes from the material's backface; keep face normals pointing outward.
-//   - Roller wave assumes 1 UV unit = 1 meter (a 1 m x 1 m UVW Map, or Real-World Map Size).
-// Roller wave (typical) ships as roller_wave_normal.png; roller_wave_strength tunes it and 0 disables. Assumes 1 UV unit = 1 meter.
+//   - Roller wave: wire the bundled roller_wave_bump.png into the material's geometry normal channel in Max (see the README). Assumes 1 UV unit = 1 meter.
 
-export material roller_wave_igu_planar(
-    uniform float roller_wave_strength = 0.00391
-        [[
-            anno::display_name("Roller wave strength"),
-            anno::description("Heat-treatment ripple. Default matches the typical preset (0.08mm peak-to-valley over 300mm); set 0 for optically flat glass.")
-        ]],
-    uniform float roller_wave_scale = 1.0
-        [[
-            anno::display_name("Roller wave scale"),
-            anno::description("Multiplies the wave's physical size. Leave at 1.0 when the object uses a 1 m x 1 m UVW map.")
-        ]]
-)
+export material roller_wave_igu_planar()
 [[
     anno::display_name("Roller wave IGU (planar)"),
     anno::description("Whole glazing assembly as a single thin surface."),
@@ -82,20 +68,5 @@ export material roller_wave_igu_planar(
             )
         )
     ),
-    ior: color(1.52),
-    geometry: material_geometry(
-        normal: base::tangent_space_normal_texture(
-            texture: texture_2d("./roller_wave_normal.png", tex::gamma_linear),
-            factor: roller_wave_strength,
-            uvw: base::transform_coordinate(
-                transform: base::rotation_translation_scale(
-                    scaling: float3(1.0 / (2.4 * roller_wave_scale))
-                ),
-                coordinate: base::coordinate_source(
-                    coordinate_system: base::texture_coordinate_uvw,
-                    texture_space: 0
-                )
-            )
-        )
-    )
+    ior: color(1.52)
 );

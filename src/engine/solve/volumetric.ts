@@ -7,7 +7,7 @@ import type { GlazingSystemInput } from "../types/system";
 import type { SolverWarning } from "../types/issues";
 import { buildDerived, coatingLayer, provenanceComments, volumeAbsorption } from "./common";
 import { lowerFrit } from "./frit";
-import { applyRollerWave } from "./rollerWave";
+import { rollerWaveTexture } from "./rollerWave";
 import type { SolveOutput } from "./planar";
 
 /**
@@ -115,10 +115,11 @@ export function solveVolumetric(input: GlazingSystemInput): SolveOutput {
 
   const textures: { fileName: string; bytes: Uint8Array }[] = [];
 
-  // Roller wave goes on every glass lite (not the frit decal below): the
-  // ripple is a property of the heat-treated glass itself.
+  // Roller wave ships as a Max-side bump map; the apply script wires it into
+  // each lite material's geometry normal channel (not the frit decal below):
+  // the ripple is a property of the heat-treated glass itself.
   if (input.rollerWave) {
-    textures.push(...applyRollerWave(materials, input.rollerWave).textures);
+    textures.push(rollerWaveTexture());
   }
 
   // Frit gets its own thin decal material rather than being folded into a lite.

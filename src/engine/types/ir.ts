@@ -97,13 +97,6 @@ export interface MaterialIR {
   volume?: { absorptionCoefficient: RGB };
   /** Pattern mask driving cutout_opacity, for frit decal materials. */
   cutoutOpacity?: FritWeightSource;
-  /**
-   * Tangent-space normal map applied through material_geometry.normal
-   * (roller wave). The emitter builds the canonical coordinate chain
-   * (coordinate_source + transform_coordinate) itself; ridge orientation is
-   * baked into the map.
-   */
-  normalMap?: { textureFileName: string };
   params: MaterialParamIR[];
   moduleFunctions: ModuleFunctionIR[];
   /** Provenance and assumption notes emitted above the material. */

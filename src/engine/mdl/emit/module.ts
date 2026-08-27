@@ -2,12 +2,7 @@ import type { MaterialIR } from "../../types/ir";
 import type { RGB } from "../../types/optics";
 import { MDL_VERSION, TOOL_NAME, TOOL_VERSION } from "../target";
 import { emitPatternFunction } from "./fritPattern";
-import {
-  ROLLER_WAVE_SCALE_PARAM,
-  ROLLER_WAVE_STRENGTH_PARAM,
-  ROLLER_WAVE_TILE_METERS,
-  emitObjectIdProbe,
-} from "./rollerWave";
+import { emitObjectIdProbe } from "./rollerWave";
 import { buildScattering, weightExpression } from "./layers";
 import {
   CodeWriter,
@@ -112,45 +107,10 @@ function emitMaterial(writer: CodeWriter, imports: ImportTracker, material: Mate
       weightExpression(material.cutoutOpacity, SCALE_PARAM),
     ]);
   }
-  if (material.normalMap) {
-    // The canonical coordinate chain stock Iray materials use for bump:
-    // coordinate_source supplies real surface tangents from UV channel 0 and
-    // transform_coordinate scales position (tangents pass through), so the
-    // tile lands at its physical size under the 1 UV unit = 1 meter rule.
-    // Never hand-build texture_coordinate_info here: its tangent defaults
-    // are constant axis vectors, not the surface frame.
-    geometryArgs.push([
-      "normal",
-      call(imports.ref("base", "tangent_space_normal_texture"), [
-        [
-          "texture",
-          `texture_2d("./${material.normalMap.textureFileName}", ${imports.ref("tex", "gamma_linear")})`,
-        ],
-        ["factor", ROLLER_WAVE_STRENGTH_PARAM],
-        [
-          "uvw",
-          call(imports.ref("base", "transform_coordinate"), [
-            [
-              "transform",
-              call(imports.ref("base", "rotation_translation_scale"), [
-                [
-                  "scaling",
-                  `float3(1.0 / (${num(ROLLER_WAVE_TILE_METERS)} * ${ROLLER_WAVE_SCALE_PARAM}))`,
-                ],
-              ]),
-            ],
-            [
-              "coordinate",
-              call(imports.ref("base", "coordinate_source"), [
-                ["coordinate_system", imports.ref("base", "texture_coordinate_uvw")],
-                ["texture_space", "0"],
-              ]),
-            ],
-          ]),
-        ],
-      ]),
-    ]);
-  }
+  // NOTE: no `normal` argument ever goes in material_geometry — Iray+ 3.1
+  // silently ignores it (field-confirmed twice, docs/iray-findings.md 7.6).
+  // Roller wave lives on the Max side, wired by the apply script into the
+  // plugin's own "geometry normal" map channel.
   if (geometryArgs.length) {
     args.push(["geometry", call("material_geometry", geometryArgs)]);
   }

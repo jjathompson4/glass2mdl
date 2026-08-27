@@ -5,21 +5,28 @@ import { CodeWriter, ImportTracker } from "./writer";
 /**
  * Roller wave: the faint periodic ripple tempering rollers leave in
  * heat-treated glass. It is what makes rendered reflections read as glass
- * instead of a mirror-perfect CG plane, so exports ship it as a tangent-space
- * normal map wired into every glass material's geometry.
+ * instead of a mirror-perfect CG plane.
+ *
+ * The ripple lives entirely on the 3ds Max side: exports ship a grayscale
+ * bump map (bright = high) and the bundled apply script wires it into the
+ * Iray+ MDL material's "geometry normal" map channel as an ordinary Max
+ * bitmap node, visible and tweakable in Slate. Nothing rides inside the MDL:
+ * `material_geometry.normal` in MDL source is silently ignored by Iray+ 3.1
+ * (field-confirmed twice, docs/iray-findings.md 7.6), while the plugin's own
+ * Max-side channel is field-confirmed to work.
  *
  * Variability is the point (identical ripple on every IGU is its own CG
  * tell): one large tile carries several waves that differ from each other —
  * incommensurate secondary wavelengths plus low-frequency amplitude and phase
- * modulation and a seeded irregularity — and the Max apply script offsets
- * each object's UVs so no two lites sample the same region.
+ * modulation and a seeded irregularity — and the apply script offsets each
+ * object's UVs so no two lites sample the same region.
  *
- * Orientation is baked into the map: the wave varies along V, so under the
- * 1 UV unit = 1 meter box mapping (V vertical on a facade) the ridges run
- * horizontally, the installed norm. The MDL side never swaps axes.
+ * The wave varies along V, so under the 1 UV unit = 1 meter box mapping
+ * (V vertical on a facade) the ridges run horizontally, the installed norm:
+ * a facade's lites share the fabricator's furnace direction.
  */
 
-export const ROLLER_WAVE_FILE = "roller_wave_normal.png";
+export const ROLLER_WAVE_FILE = "roller_wave_bump.png";
 
 /** One texture tile spans this much glass under the 1 UV = 1 meter rule. */
 export const ROLLER_WAVE_TILE_METERS = 2.4;
@@ -28,31 +35,15 @@ export const ROLLER_WAVE_TILE_METERS = 2.4;
 export const ROLLER_WAVE_WAVELENGTH_MM = 300;
 
 /**
- * The map stores slopes exaggerated by this factor over a "typical" 0.08mm
- * peak-to-valley wave; the material's strength parameter divides it back
- * out. Baking exaggerated spreads the signal across ~±40 of the 8-bit
- * levels, so quantization never bands, while the defaults stay small honest
- * numbers.
+ * Peak-to-valley depth presets, in millimeters over a 300mm wave. The map is
+ * normalized to full range; depth lands as the Max bitmap node's output
+ * amount, scaled by preset relative to "typical".
  */
-const BAKE_EXAGGERATION = 256;
-
-/** Peak-to-valley depth presets, in millimeters over a 300mm wave. */
 export const ROLLER_WAVE_DEPTH_MM: Record<"subtle" | "typical" | "strong", number> = {
   subtle: 0.03,
   typical: 0.08,
   strong: 0.15,
 };
-
-const REFERENCE_DEPTH_MM = ROLLER_WAVE_DEPTH_MM.typical;
-
-/** Material parameter names shared by emit, solvers, and the README. */
-export const ROLLER_WAVE_STRENGTH_PARAM = "roller_wave_strength";
-export const ROLLER_WAVE_SCALE_PARAM = "roller_wave_scale";
-
-/** The strength parameter default that realizes a given depth preset. */
-export function rollerWaveStrength(depth: keyof typeof ROLLER_WAVE_DEPTH_MM): number {
-  return Math.round((ROLLER_WAVE_DEPTH_MM[depth] / REFERENCE_DEPTH_MM / BAKE_EXAGGERATION) * 1e5) / 1e5;
-}
 
 const SIZE = 512;
 
@@ -94,12 +85,12 @@ function makeNoise(seed: number, cells: number): (u: number, v: number) => numbe
 const TAU = Math.PI * 2;
 
 /**
- * Surface height in meters at a point on the tile (u, v in 0..1), for a wave
- * running along v — ridges land horizontal under the standard box mapping.
- * Every term is periodic in the tile so the map tiles seamlessly; the
- * secondary wavelengths are near-incommensurate with the primary (rounded to
- * whole cycles per tile), which is what keeps any two waves in the tile from
- * matching.
+ * Surface height at a point on the tile (u, v in 0..1), unitless — the map
+ * is normalized afterward, so only the shape matters here. The wave runs
+ * along v; every term is periodic in the tile so the map tiles seamlessly,
+ * and the secondary wavelengths are near-incommensurate with the primary
+ * (rounded to whole cycles per tile), which is what keeps any two waves in
+ * the tile from matching.
  */
 function buildHeightField(): (u: number, v: number) => number {
   const tileMm = ROLLER_WAVE_TILE_METERS * 1000;
@@ -107,7 +98,6 @@ function buildHeightField(): (u: number, v: number) => number {
   const primary = cycles(ROLLER_WAVE_WAVELENGTH_MM); // 8 cycles
   const second = cycles(211); // 11 cycles
   const third = cycles(487); // 5 cycles
-  const amplitude = (REFERENCE_DEPTH_MM / 2) * BAKE_EXAGGERATION * 1e-3; // meters
   const ampNoise = makeNoise(0x9e3779b9, 5);
   const phaseNoise = makeNoise(0x85ebca6b, 4);
   const microNoise = makeNoise(0xc2b2ae35, 11);
@@ -120,39 +110,40 @@ function buildHeightField(): (u: number, v: number) => number {
       0.34 * Math.sin(TAU * (second * v + 0.27) + drift * 2.1) +
       0.22 * Math.sin(TAU * (third * v + 0.71) - drift * 1.4);
     const micro = 0.1 * microNoise(u, v);
-    return amplitude * (envelope * wave + micro);
+    return envelope * wave + micro;
   };
 }
 
 let cachedMap: Uint8Array | null = null;
 
 /**
- * The shipped tangent-space normal map: slopes of the height field, encoded
- * as 8-bit RGB with the usual (n * 0.5 + 0.5) mapping — the format every
- * image loader reads. Deterministic and memoized; `contentRevision` hashes
- * these bytes, so the map participates in cache-busting like every other
- * shipped file.
+ * The shipped grayscale bump map (r = g = b, bright = high), normalized to
+ * the full 0..255 range so the depth control lives entirely on the Max side.
+ * Deterministic and memoized; `contentRevision` hashes these bytes, so the
+ * map participates in cache-busting like every other shipped file.
  */
-export function rollerWaveNormalMap(): Uint8Array {
+export function rollerWaveBumpMap(): Uint8Array {
   if (cachedMap) return cachedMap;
   const height = buildHeightField();
-  const tile = ROLLER_WAVE_TILE_METERS;
-  const step = 1 / SIZE;
-  const pixels = new Uint8Array(SIZE * SIZE * 3);
+  const values = new Float64Array(SIZE * SIZE);
+  let min = Infinity;
+  let max = -Infinity;
   let p = 0;
   for (let y = 0; y < SIZE; y++) {
-    const v = y / SIZE;
     for (let x = 0; x < SIZE; x++) {
-      const u = x / SIZE;
-      // Central differences across the tile (wrapping keeps it seamless).
-      const dhdu = (height(u + step, v) - height(u - step, v)) / (2 * step * tile);
-      const dhdv = (height(u, v + step) - height(u, v - step)) / (2 * step * tile);
-      const inv = 1 / Math.sqrt(dhdu * dhdu + dhdv * dhdv + 1);
-      const n = [-dhdu * inv, -dhdv * inv, inv];
-      for (let c = 0; c < 3; c++) {
-        pixels[p++] = Math.max(0, Math.min(255, Math.round((n[c] * 0.5 + 0.5) * 255)));
-      }
+      const h = height(x / SIZE, y / SIZE);
+      values[p++] = h;
+      if (h < min) min = h;
+      if (h > max) max = h;
     }
+  }
+  const range = max - min || 1;
+  const pixels = new Uint8Array(SIZE * SIZE * 3);
+  for (let i = 0; i < values.length; i++) {
+    const level = Math.round(((values[i] - min) / range) * 255);
+    pixels[i * 3] = level;
+    pixels[i * 3 + 1] = level;
+    pixels[i * 3 + 2] = level;
   }
   cachedMap = encodePngRgb8(SIZE, SIZE, pixels);
   return cachedMap;

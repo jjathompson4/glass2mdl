@@ -1,0 +1,57 @@
+mdl 1.6;
+
+import ::anno::*;
+import ::df::*;
+
+// Does backface work on a thin-walled material?
+//
+// Setup: Apply to a single flat plane. View it from the front, then from
+// behind.
+//
+// Expected: RED from the front, BLUE from behind. If both sides look the
+// same, backface is not being honoured and the planar export's interior
+// reflectance is wrong.
+
+// Front reflects RED, back reflects BLUE.
+// Both sides identical means backface was ignored.
+
+export material test01_thinwalled_backface()
+[[
+    anno::display_name("01 thin-walled backface"),
+    anno::description("01 thin-walled backface"),
+    anno::author("glass2mdl 0.1.0")
+]]
+= material(
+    thin_walled: true,
+    surface: material_surface(
+        scattering: df::custom_curve_layer(
+            normal_reflectivity: 0.5,
+            grazing_reflectivity: 1.0,
+            exponent: 5.0,
+            layer: df::specular_bsdf(
+                tint: color(0.9, 0.1, 0.1),
+                mode: df::scatter_reflect
+            ),
+            base: df::specular_bsdf(
+                tint: color(1.0, 1.0, 1.0),
+                mode: df::scatter_transmit
+            )
+        )
+    ),
+    backface: material_surface(
+        scattering: df::custom_curve_layer(
+            normal_reflectivity: 0.5,
+            grazing_reflectivity: 1.0,
+            exponent: 5.0,
+            layer: df::specular_bsdf(
+                tint: color(0.1, 0.2, 0.9),
+                mode: df::scatter_reflect
+            ),
+            base: df::specular_bsdf(
+                tint: color(1.0, 1.0, 1.0),
+                mode: df::scatter_transmit
+            )
+        )
+    ),
+    ior: color(1.52)
+);
