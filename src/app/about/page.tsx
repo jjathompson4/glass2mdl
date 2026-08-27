@@ -55,7 +55,7 @@ export default function About() {
 
           <h2 className="pt-2 text-base font-semibold">Honesty</h2>
           <p>
-            This is visible-light appearance for rendering and point-in-time calculations, not
+            This is visible-light physics for rendering and point-in-time calculations, not
             thermal or annual daylight analysis. Glass color is a physically sensible estimate
             from your substrate choice unless the data sheet publishes color data, which you
             can enter.
