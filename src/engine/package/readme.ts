@@ -161,13 +161,14 @@ export function buildReadme(options: {
       "",
       "The apply script wires the map into each glass material's geometry",
       "normal channel automatically; look for the 'g2m roller wave' bitmap",
-      "node in the Slate editor, where its strength is tweaked or the map",
-      "disconnected like any other. If assigning materials by hand instead,",
-      "drag roller_wave_bump.png into the material's geometry normal",
-      "channel yourself. The script also adds a 1 m UV map modifier so the",
-      "ripple lands at true scale (mapping only; the glass shape is",
-      "untouched) and offsets each object's UVs so no two lites carry the",
-      "identical ripple.",
+      "node in the Slate editor, where its strength (Output Amount) and",
+      "size are tweaked or the map disconnected like any other. If",
+      "assigning materials by hand instead, drag roller_wave_bump.png into",
+      "the material's geometry normal channel with Use Real-World Scale",
+      "checked, size 20ft x 20ft, and Output Amount 0.1 as a starting",
+      "point. The script also adds a 1 m UV map modifier (mapping only;",
+      "the glass shape is untouched) and offsets each object's UVs so no",
+      "two lites carry the identical ripple.",
     );
   }
 

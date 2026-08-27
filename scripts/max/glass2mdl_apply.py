@@ -805,12 +805,20 @@ def load_manifest(path):
     return data.get("types", data)
 
 
+#: Field-calibrated look (Jeff, 2026-08-27, real project scene): one map
+#: tile spread over 20 ft x 20 ft real-world, output amount 0.1. That
+#: stretches the baked waves to a gentle ~2.5 ft period, the soft warp real
+#: curtainwall shows at a distance. Tweak here, or on the bitmap node.
+ROLLER_WAVE_SIZE_MM = 6096.0  # 20 ft per map tile
+ROLLER_WAVE_OUTPUT_AMOUNT = 0.1  # at the "typical" depth preset
+
+
 def _roller_wave_bitmap():
     """One shared Max bitmap node for the manifest's roller wave bump map.
 
     Returns (bitmap, depth_multiplier) or (None, 1.0) when the manifest has no
     roller wave or the file is missing. The map is grayscale height (bright =
-    high); depth comes from the channel amount or the bitmap's output amount,
+    high), applied at real-world scale; depth is the bitmap's output amount,
     scaled per preset relative to "typical"."""
     rw = _manifest_extras.get("roller_wave")
     folder = _manifest_extras.get("dir")
@@ -831,21 +839,34 @@ def _roller_wave_bitmap():
         except Exception:  # noqa: BLE001
             bmp.filename = path
         bmp.name = "g2m roller wave"
+        try:
+            size = _mm(ROLLER_WAVE_SIZE_MM)
+            bmp.coords.realWorldScale = True
+            bmp.coords.realWorldWidth = size
+            bmp.coords.realWorldHeight = size
+        except Exception as exc:  # noqa: BLE001
+            print("g2m: could not set real-world scale on the roller wave map"
+                  " (%s); set it on the bitmap node by hand." % exc)
+        try:
+            bmp.output.output_amount = ROLLER_WAVE_OUTPUT_AMOUNT * mult
+        except Exception:  # noqa: BLE001
+            pass
         return bmp, mult
     except Exception as exc:  # noqa: BLE001
         print("g2m: could not create the roller wave bitmap: %s" % exc)
         return None, 1.0
 
 
-def _wire_roller_wave(mat, bmp, mult):
+def _wire_roller_wave(mat, bmp):
     """Wire the bump map into the material's geometry normal map slot.
 
     The sockets Slate shows on the Iray+ material (geometry opacity / normal /
     displacement) are the material's SUB-TEXMAP SLOTS, so enumerate those the
     way Slate does; plain properties are only a fallback for other plugin
     spellings. The normal socket is field-confirmed to distort rendered
-    reflections (hand-wired Noise map, 2026-08-27). Returns
-    (wired, amount_set)."""
+    reflections (hand-wired maps, 2026-08-27). Depth lives on the bitmap's
+    output amount, set by _roller_wave_bitmap, so no amount property is
+    touched here. Returns True when wired."""
 
     def is_normal(name):
         ln = name.lower()
@@ -877,7 +898,7 @@ def _wire_roller_wave(mat, bmp, mult):
         except Exception as exc:  # noqa: BLE001
             print("g2m: setSubTexmap on '%s' failed: %s" % (best[2], exc))
 
-    # 2. Property fallback, plus the enable/amount sweep either way.
+    # 2. Property fallback, plus an enable sweep either way.
     try:
         names = [str(n) for n in rt.getPropNames(mat)]
     except Exception:  # noqa: BLE001
@@ -895,17 +916,10 @@ def _wire_roller_wave(mat, bmp, mult):
                 except Exception:  # noqa: BLE001
                     continue
 
-    amount_set = False
     if wired:
         for n in names:
             ln = n.lower()
-            if is_normal(n) and ("amount" in ln or "strength" in ln):
-                try:
-                    rt.setProperty(mat, n, mult)
-                    amount_set = True
-                except Exception:  # noqa: BLE001
-                    pass
-            elif is_normal(n) and ("enable" in ln or ln.endswith("_on")):
+            if is_normal(n) and ("enable" in ln or ln.endswith("_on")):
                 try:
                     rt.setProperty(mat, n, True)
                 except Exception:  # noqa: BLE001
@@ -914,7 +928,7 @@ def _wire_roller_wave(mat, bmp, mult):
         # Nothing matched: name what exists, so the next fix is data-driven.
         print("g2m: no normal slot among this material's sockets: %s"
               % ", ".join(repr(s) for s in slot_names if s))
-    return wired, amount_set
+    return wired
 
 
 def make_iray_mdl_factory(manifest):
@@ -1084,9 +1098,8 @@ def bind(type_map=None, material_factory=None, add_uv=True):
     bound = unmatched = uv_mapped = 0
     # One shared bitmap: every lite material gets the same map node, and the
     # per-object UV offsets below are what keep the ripple varied.
-    roller_bmp, roller_mult = _roller_wave_bitmap() if material_factory else (None, 1.0)
+    roller_bmp, _roller_mult = _roller_wave_bitmap() if material_factory else (None, 1.0)
     roller_wired = 0
-    roller_amount_missing = False
     for obj in _tagged_objects():
         stamped = rt.getUserProp(obj, PROP_TYPE)
         prefix = str(stamped) if stamped not in (None, "", "undefined") else None
@@ -1114,11 +1127,8 @@ def bind(type_map=None, material_factory=None, add_uv=True):
                 mat = material_factory(prefix, position, slot) if material_factory else None
                 mm.materialList[i] = mat
                 if mat is not None and roller_bmp is not None:
-                    wired, amount_set = _wire_roller_wave(mat, roller_bmp, roller_mult)
-                    if wired:
+                    if _wire_roller_wave(mat, roller_bmp):
                         roller_wired += 1
-                        if not amount_set:
-                            roller_amount_missing = True
             multis[key] = mm
         if add_uv and _ensure_uv(obj):
             uv_mapped += 1
@@ -1132,21 +1142,14 @@ def bind(type_map=None, material_factory=None, add_uv=True):
     if roller_bmp is not None:
         if roller_wired:
             print("g2m: wired the roller wave bump map into %d materials"
-                  " (geometry normal channel; the 'g2m roller wave' bitmap"
-                  " is visible in Slate)." % roller_wired)
-            if roller_amount_missing:
-                # No amount property found: fall back to scaling the map
-                # itself so the depth preset still lands.
-                try:
-                    roller_bmp.output.output_amount = roller_mult
-                    print("g2m: depth preset applied via the bitmap's Output"
-                          " Amount (%.2f); tweak it there." % roller_mult)
-                except Exception:  # noqa: BLE001
-                    print("g2m: no strength property found; adjust the ripple"
-                          " via the bitmap's Output rollout.")
+                  " (geometry normal channel; the 'g2m roller wave' bitmap is"
+                  " visible in Slate). Real-world size 20ft x 20ft, output"
+                  " amount %.2f; tweak both on the bitmap node."
+                  % (roller_wired, ROLLER_WAVE_OUTPUT_AMOUNT * _roller_mult))
         else:
             print("g2m: could not find the geometry normal channel; wire"
-                  " 'g2m roller wave' (%s) into it by hand in Slate."
+                  " 'g2m roller wave' (%s) into it by hand in Slate: check"
+                  " Use Real-World Scale, size 20ft x 20ft, Output Amount 0.1."
                   % _manifest_extras["roller_wave"].get("file", "roller_wave_bump.png"))
     if material_factory is None and multis:
         print("Slots are empty by design. Drag the glass2mdl materials from")

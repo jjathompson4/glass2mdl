@@ -135,16 +135,21 @@ so frit stays UV-based and coverage % is the spec.
    and the apply script's Assign wires the map into every lite material's
    geometry normal channel as a shared "g2m roller wave" bitmap — visible
    and tweakable in Slate, which is the workflow Jeff wanted all along
-   (`_roller_wave_bitmap` + `_wire_roller_wave`; property names are probed,
-   depth presets scale a channel amount or the bitmap's Output Amount:
-   subtle 0.4 / typical 1.0 / strong 1.9 — PLACEHOLDER VALUES, calibrate
-   against Jeff's first render and bake his number in). The MDL is now
+   (`_roller_wave_bitmap` + `_wire_roller_wave`; Slate's sockets are
+   SUB-TEXMAP slots, probed via getSubTexmapSlotName — getPropNames never
+   sees them). **Manual wiring render-confirmed by Jeff 2026-08-27** and his
+   calibration is baked in: Use Real-World Scale, 20ft x 20ft per tile,
+   Output Amount 0.1 at "typical" (subtle 0.4x / strong 1.9x) — constants
+   ROLLER_WAVE_SIZE_MM / ROLLER_WAVE_OUTPUT_AMOUNT at the top of the wiring
+   section. The stretched tile reads as a gentle ~2.5ft-period curtainwall
+   warp, which his eye chose over literal 300mm ripple. The MDL is now
    optics-only (export test enforces it); planar mode has no script, so the
-   README tells those users to wire the map by hand. UVW Map + name-seeded
-   per-object offsets still provide the lite-to-lite variability. Kit entry
-   renamed 09_object_variation (state::object_id probe; arity bug fixed).
-   GATE: one workstation render of a real export (fresh ZIP → Assign →
-   grazing reflection) before deploy, plus the strength calibration.
+   README gives the manual wiring settings. UVW Map + name-seeded per-object
+   offsets still provide the lite-to-lite variability. Kit entry renamed
+   09_object_variation (state::object_id probe; arity bug fixed). GATE: one
+   clean Assign run confirming the AUTOMATED wiring reproduces the manual
+   result, then deploy on Jeff's word. Accuracy: appearance-only; Output
+   Amount 0 for calibrated luminance studies.
 
 9. **Workstation follow-ups** — the Iray+ API discovery and the apply-workflow
    validation are **done** (2026-08-25); the per-lite stacked render is **done**.
