@@ -22,7 +22,7 @@ The same pipeline is scriptable from the listener:
                                  # auto-identify lite-shaped solids, select them
     #   ...review the selection in the viewport, deselect false positives...
     ga.tag()                     # tag current selection (or ga.tag("*glass*"))
-    ga.qa()                      # red=exterior / blue=interior / green=edges
+    ga.qa()                      # green=exterior / red=interior / blue=edges
     ga.flip_selected()           # exterior/interior guessed wrong? select, flip
     ga.flip_all()                # ...or flip every tagged IGU at once
     ga.assign_type("v5227_dgu")  # stamp the type on the current selection when
@@ -36,7 +36,7 @@ The same pipeline is scriptable from the listener:
 
 The exterior/interior guess uses the glazing centroid, which is ambiguous for
 a single flat facade — that is what qa() + flip is for: orient the model,
-exterior must read red, flip what is wrong. Consistency matters more than the
+exterior must read green, flip what is wrong. Consistency matters more than the
 first guess being right.
 
 v1 scope: each lite is a separate solid object (Editable Poly or Editable
@@ -67,11 +67,12 @@ ID_EXTERIOR = 1
 ID_INTERIOR = 2
 ID_EDGE = 3
 
-# Same hues as the validation kit, so red/blue already mean front/back to us.
+# Green = exterior reads as "good to go" from outside, red = interior showing
+# means something is flipped, blue = edges. (Jeff's request, 2026-08-27.)
 QA_COLORS = {
-    ID_EXTERIOR: ("exterior (ID1)", (230, 26, 26)),
-    ID_INTERIOR: ("interior (ID2)", (26, 51, 230)),
-    ID_EDGE: ("edges (ID3)", (26, 204, 51)),
+    ID_EXTERIOR: ("exterior (ID1)", (26, 204, 51)),
+    ID_INTERIOR: ("interior (ID2)", (230, 26, 26)),
+    ID_EDGE: ("edges (ID3)", (26, 51, 230)),
 }
 
 PROP_TAGGED = "g2m_tagged"
@@ -608,7 +609,7 @@ def _diag_material(name, rgb):
 
 def qa():
     """Assign the red/blue/green diagnostic Multi-Sub to every tagged lite.
-    Orbit the model: exterior must read red everywhere."""
+    Orbit the model: exterior must read green everywhere."""
     if rt is None:
         print("Run inside 3ds Max.")
         return
@@ -1384,7 +1385,7 @@ def show_gui():
     lay2 = group("2 · Tag faces + color check",
                  "Assigns face IDs on the selection (1 exterior / 2 interior / "
                  "3 edges) and paints the check colors. Orbit the model: "
-                 "exterior glass must read RED. Blue outside? Select it and "
+                 "exterior glass must read GREEN. Red outside? Select it and "
                  "flip.")
     chk_convert = QtWidgets.QCheckBox(
         "Collapse to Editable Poly when needed (undoable; required for face IDs)")
@@ -1544,7 +1545,7 @@ def show_gui():
     _GUI = dlg
     log.appendPlainText(
         "Workflow: select your glazing in the viewport > Check > Tag + color "
-        "check > flip anything blue-out > choose the manifest > Assign "
+        "check > flip anything red-out > choose the manifest > Assign "
         "materials.\n"
         "No Material ID setup is needed beforehand; tagging does it.")
     print("g2m: window open. If you closed it, run this script again.")
