@@ -14,6 +14,38 @@ import { fromDisplay, toDisplay, unitLabel, unitStep } from "@/lib/units";
 import { ActionButton, Field, NumberInput, SegmentedControl, Select, Section } from "@/components/ui/fields";
 import { GlassColorPanel, Swatch } from "./GlassColorPanel";
 
+/**
+ * A feature shown at its place in the stack, so the card reads as the full
+ * exterior-to-interior sandwich. Editing stays in the feature's own card —
+ * this row only points there.
+ */
+function FeatureRow({ kind, surface }: { kind: "coating" | "frit"; surface: number }) {
+  const isCoating = kind === "coating";
+  return (
+    <button
+      type="button"
+      aria-label={`Go to the ${kind} card`}
+      onClick={() =>
+        document
+          .getElementById(isCoating ? "card-coating" : "card-frit")
+          ?.scrollIntoView({ behavior: "smooth", block: "start" })
+      }
+      className={`flex w-full items-center gap-2 rounded-md border px-3 py-1.5 text-left transition hover:opacity-80 ${
+        isCoating ? "border-accent/50 bg-accent-soft" : "border-warning/50 bg-warning-soft"
+      }`}
+    >
+      <span
+        className={`h-2.5 w-2.5 shrink-0 rounded-sm ${isCoating ? "bg-accent" : "bg-warning"}`}
+        aria-hidden
+      />
+      <span className={`text-xs font-semibold ${isCoating ? "text-accent" : "text-warning"}`}>
+        {isCoating ? "Coating" : "Frit"} · #{surface}
+      </span>
+      <span className="ml-auto shrink-0 text-[11px] text-muted">edit below ↓</span>
+    </button>
+  );
+}
+
 export function ConstructionSection() {
   // Separate selectors, not one object selector: a fresh object every render
   // would defeat the equality check and re-render on unrelated state changes.
@@ -26,6 +58,12 @@ export function ConstructionSection() {
 
   const coating = system.lites.find((l) => l.coating)?.coating;
   const coatingHue = coating?.reflectedColor ?? gray(1);
+  const frit = system.frit;
+  // Coating before frit when both sit on one surface, matching the diagram.
+  const featuresOn = (surface: number): ("coating" | "frit")[] => [
+    ...(coating?.surface === surface ? (["coating"] as const) : []),
+    ...(frit?.surface === surface ? (["frit"] as const) : []),
+  ];
   const adjustedCount = [
     system.assembly.transmittedColor,
     system.assembly.reflectedColorExt,
@@ -59,6 +97,10 @@ export function ConstructionSection() {
       <div className="space-y-2">
         {system.lites.map((lite, index) => (
           <Fragment key={index}>
+            {featuresOn(index * 2 + 1).map((kind) => (
+              <FeatureRow key={kind} kind={kind} surface={index * 2 + 1} />
+            ))}
+
             <div className="rounded-md border border-border-subtle p-3">
               <div className="grid grid-cols-2 items-end gap-3 sm:grid-cols-[auto_1fr_1fr]">
                 <span className="col-span-2 text-xs font-semibold text-muted sm:col-span-1 sm:pb-1.5">
@@ -94,6 +136,10 @@ export function ConstructionSection() {
                 </Field>
               </div>
             </div>
+
+            {featuresOn(index * 2 + 2).map((kind) => (
+              <FeatureRow key={kind} kind={kind} surface={index * 2 + 2} />
+            ))}
 
             {/* The cavity gets its own slim card between the lites, sunken so
                 it reads as the gap rather than part of a pane. */}

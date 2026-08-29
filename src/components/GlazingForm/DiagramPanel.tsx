@@ -211,6 +211,15 @@ export function VerdictChip({
   }
   if (!verdict) return null;
 
+  // The full chip is desktop-length prose; phones get chipCompact so the
+  // verdict stays one line in the pinned bar's narrow column.
+  const chipText = (
+    <>
+      <span className="hidden sm:inline">{verdict.chip}</span>
+      <span className="whitespace-nowrap sm:hidden">{verdict.chipCompact}</span>
+    </>
+  );
+
   if (verdict.tone === "exact") {
     return (
       <span className="inline-flex items-center gap-1.5 text-xs font-medium text-success">
@@ -218,12 +227,12 @@ export function VerdictChip({
           <circle cx="6" cy="6" r="4.75" />
           <path d="M3.8 6.2 L5.3 7.7 L8.2 4.6" />
         </svg>
-        {verdict.chip}
+        {chipText}
       </span>
     );
   }
   if (verdict.tone === "close") {
-    return <span className="text-xs text-muted">{verdict.chip}</span>;
+    return <span className="text-xs text-muted">{chipText}</span>;
   }
   return (
     <span className="inline-flex items-center gap-1.5 text-xs font-medium text-warning">
@@ -231,7 +240,7 @@ export function VerdictChip({
         <path d="M6 1.5 L11 10.5 L1 10.5 Z" />
         <line x1="6" y1="4.5" x2="6" y2="7.5" />
       </svg>
-      {verdict.chip}
+      {chipText}
     </span>
   );
 }
@@ -258,10 +267,11 @@ function CondensedBar({
         fritSurface={frit?.surface}
       />
 
-      {/* On phones the name and number strip give way, but the summary and
-          tags stay: the bar's job is telling you what you're building while
-          the cards are scrolled away. */}
-      <div className="min-w-0 flex-1">
+      {/* On phones the name and number strip give way, and once a real fit
+          verdict exists it takes the whole line: a 335px row cannot hold the
+          summary, the tags, AND the verdict, and the verdict is the one thing
+          the pinned bar must say. */}
+      <div className={verdict && !estimated ? "hidden min-w-0 flex-1 sm:block" : "min-w-0 flex-1"}>
         <div className="flex items-baseline gap-2">
           <span className="hidden truncate text-[13px] font-semibold text-foreground sm:inline">
             {system.name}
@@ -276,7 +286,7 @@ function CondensedBar({
               <button
                 type="button"
                 onClick={() => onJump("coating")}
-                className="rounded-full border border-accent bg-accent-soft px-2 py-px text-[10px] font-semibold text-accent transition hover:opacity-80"
+                className="whitespace-nowrap rounded-full border border-accent bg-accent-soft px-2 py-px text-[10px] font-semibold text-accent transition hover:opacity-80"
               >
                 coating · #{coating.surface}
               </button>
@@ -285,7 +295,7 @@ function CondensedBar({
               <button
                 type="button"
                 onClick={() => onJump("frit")}
-                className="rounded-full border border-warning bg-warning-soft px-2 py-px text-[10px] font-semibold text-warning transition hover:opacity-80"
+                className="whitespace-nowrap rounded-full border border-warning bg-warning-soft px-2 py-px text-[10px] font-semibold text-warning transition hover:opacity-80"
               >
                 frit · #{frit.surface}
               </button>

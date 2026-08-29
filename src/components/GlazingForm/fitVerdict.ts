@@ -1,10 +1,11 @@
 import { luminance, type DerivedOptics } from "@/engine";
 
-/** The three cutsheet quantities, paired with the recomputed field that must reproduce each. */
+/** The three cutsheet quantities, paired with the recomputed field that must reproduce each.
+ * `short` matches the number strip's vocabulary so the chip and the numbers agree. */
 export const FIT_QUANTITIES = [
-  { key: "tvis", produced: "t", label: "Transmittance" },
-  { key: "rvisExt", produced: "rFront", label: "Reflectance, exterior" },
-  { key: "rvisInt", produced: "rBack", label: "Reflectance, interior" },
+  { key: "tvis", produced: "t", label: "Transmittance", short: "VLT" },
+  { key: "rvisExt", produced: "rFront", label: "Reflectance, exterior", short: "Reflect ext" },
+  { key: "rvisInt", produced: "rBack", label: "Reflectance, interior", short: "Reflect int" },
 ] as const;
 
 export type FitTone = "exact" | "close" | "off";
@@ -15,6 +16,8 @@ export interface FitVerdict {
   title: string;
   /** Short form for the always-visible chip in the diagram panel. */
   chip: string;
+  /** Phone-width form of the chip; must survive a ~110px column on one line. */
+  chipCompact: string;
   /** The quantity furthest from its entered value. */
   worst: (typeof FIT_QUANTITIES)[number];
 }
@@ -46,6 +49,7 @@ export function fitVerdict(
       tone: "exact",
       title: "The materials reproduce your numbers exactly",
       chip: "reproduced exactly",
+      chipCompact: "reproduced exactly",
       worst,
     };
   }
@@ -55,6 +59,7 @@ export function fitVerdict(
       tone: "close",
       title: `Within ${off} of intended values`,
       chip: `within ${off} of intended values`,
+      chipCompact: `within ${off}`,
       worst,
     };
   }
@@ -63,6 +68,7 @@ export function fitVerdict(
     tone: "off",
     title: `Closest match is ${off} off on ${worst.label.toLowerCase()}`,
     chip: `${off} off on ${worst.label.toLowerCase()}`,
+    chipCompact: `${off} off · ${worst.short}`,
     worst,
   };
 }
