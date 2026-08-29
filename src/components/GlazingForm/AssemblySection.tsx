@@ -2,12 +2,13 @@
 
 import type { Fraction } from "@/engine";
 import { useAppStore } from "@/lib/store";
-import { Field, PercentInput, Section } from "@/components/ui/fields";
+import { Field, PercentInput, Section, TextInput } from "@/components/ui/fields";
 
 /**
- * The three numbers every cutsheet reports, typed straight in. Color and the
- * observer setting live in Construction's Glass color panel — they only
- * matter in the rare case where color data was published.
+ * The data sheet header, typed straight in: the product name and the three
+ * numbers every cutsheet reports. Color and the observer setting live in
+ * Construction's Glass color panel — they only matter in the rare case where
+ * color data was published.
  *
  * An energy bar sits underneath because transmitted plus reflected light
  * cannot exceed what arrived, and watching that budget fill catches a
@@ -16,6 +17,8 @@ import { Field, PercentInput, Section } from "@/components/ui/fields";
  * other two.
  */
 export function AssemblySection() {
+  const name = useAppStore((s) => s.system.name);
+  const setName = useAppStore((s) => s.setName);
   const assembly = useAppStore((s) => s.system.assembly);
   const setAssembly = useAppStore((s) => s.setAssembly);
 
@@ -31,16 +34,27 @@ export function AssemblySection() {
       id="card-cutsheet"
       title={
         <>
-          <span className="text-accent">3</span>
+          <span className="text-accent">1</span>
           <span className="text-muted"> · </span>
           Data sheet values
         </>
       }
-      description="The three visible-light values from the performance table. Behind the scenes, the tool fits each lite's material properties so the rendered assembly reproduces these numbers. Warnings will appear if the fit is unrealistic."
+      description="The header of your data sheet: the product name and the three visible-light values from the performance table. The tool fits each lite's material properties so the rendered assembly reproduces these numbers; warnings appear if the fit is unrealistic."
     >
+      <div className="max-w-md">
+        <Field label="Product name" hint="Used for the material and file names.">
+          <TextInput
+            value={name}
+            onChange={setName}
+            placeholder="e.g. Solarban 60 on clear"
+            ariaLabel="Product name"
+          />
+        </Field>
+      </div>
+
       {/* Typed values are never rewritten — an impossible pair gets flagged
           below instead of being silently corrected. */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="mt-3 grid gap-4 border-t border-border-subtle pt-3 md:grid-cols-3">
         <Field label="Transmittance (VLT)">
           <PercentInput value={assembly.tvis} onChange={(tvis) => set({ tvis: tvis as Fraction })} />
         </Field>

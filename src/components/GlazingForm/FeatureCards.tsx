@@ -46,7 +46,7 @@ export function CoatingCard({ derived }: { derived: DerivedOptics | null }) {
     <FeatureCardShell
       id="card-coating"
       title="Coating"
-      number={2}
+      number={3}
       squareClass="bg-accent"
       borderClass="border-accent/50"
       onRemove={() => setCoating(coatedIndex, undefined)}
@@ -133,7 +133,7 @@ export function FritCard() {
     <FeatureCardShell
       id="card-frit"
       title="Frit"
-      number={2}
+      number={3}
       squareClass="bg-warning"
       borderClass="border-border-subtle"
       onRemove={() => setFrit(undefined)}
@@ -194,7 +194,7 @@ export function SurfaceFeaturesGhost() {
   const addFrit = () =>
     setFrit(defaultFrit(system.lites.length > 1 ? 2 : 1, { r: 0.9, g: 0.9, b: 0.88 }));
 
-  // Neither feature yet: this ghost IS card 2. One feature present: its real
+  // Neither feature yet: this ghost IS card 3. One feature present: its real
   // card carries the number and this shrinks to a one-line add row.
   if (!hasCoating && !hasFrit) {
     return (
@@ -202,7 +202,7 @@ export function SurfaceFeaturesGhost() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="text-sm font-semibold text-foreground">
-              <span className="text-accent">2</span>
+              <span className="text-accent">3</span>
               <span className="text-muted"> · </span>
               Surface features
             </p>

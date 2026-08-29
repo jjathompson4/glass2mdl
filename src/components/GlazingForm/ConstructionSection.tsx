@@ -22,8 +22,6 @@ export function ConstructionSection() {
   const setLiteCount = useAppStore((s) => s.setLiteCount);
   const updateLite = useAppStore((s) => s.updateLite);
   const setGapWidth = useAppStore((s) => s.setGapWidth);
-  const setRollerWave = useAppStore((s) => s.setRollerWave);
-  const rollerWave = system.rollerWave;
   const [colorOpen, setColorOpen] = useState(false);
 
   const coating = system.lites.find((l) => l.coating)?.coating;
@@ -39,7 +37,7 @@ export function ConstructionSection() {
       id="card-construction"
       title={
         <>
-          <span className="text-accent">1</span>
+          <span className="text-accent">2</span>
           <span className="text-muted"> · </span>
           Construction
         </>
@@ -166,29 +164,6 @@ export function ConstructionSection() {
         ) : null}
       </div>
 
-      <div className="mt-3 border-t border-border-subtle pt-3">
-        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
-          <span className="text-xs font-medium text-muted">Roller wave</span>
-          <SegmentedControl
-            ariaLabel="Roller wave depth"
-            value={rollerWave?.depth ?? "off"}
-            onChange={(depth) =>
-              setRollerWave(depth === "off" ? undefined : { depth })
-            }
-            options={[
-              { value: "off", label: "Off" },
-              { value: "subtle", label: "Subtle" },
-              { value: "typical", label: "Typical" },
-              { value: "strong", label: "Strong" },
-            ]}
-          />
-        </div>
-        <p className="mt-1.5 text-[11px] leading-snug text-muted/80">
-          Real heat-treated glass carries a faint ripple from the tempering rollers; it is what
-          makes reflections read as glass. Ships as a bump map the apply script wires into the
-          material for you.
-        </p>
-      </div>
     </Section>
   );
 }

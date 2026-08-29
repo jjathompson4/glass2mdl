@@ -85,8 +85,10 @@ export default function About() {
               planned.
             </li>
             <li>
-              Outputs are tested in Iray+ 3.1 for 3ds Max 2024. Other MDL renderers are
-              untested.
+              Outputs are tested in Iray+ 3.1 for 3ds Max 2024. The materials are plain MDL 1.6
+              with no NVIDIA-specific extensions, so other MDL renderers like V-Ray should be
+              able to load them via VRayMDLMtl, but we have not tested them extensively yet. The
+              bundled apply script sets up Iray+ materials only.
             </li>
           </ul>
 

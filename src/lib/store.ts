@@ -69,7 +69,7 @@ const defaultSystem = (): GlazingSystemInput => {
       rvisInt: fraction(0.08),
     }),
     // On by default: real heat-treated glass ripples, and the realism is the
-    // point. Off and the depth presets live in the Construction card.
+    // point. Off and the depth presets live in the Rendering card.
     rollerWave: { depth: "typical" },
   };
 };

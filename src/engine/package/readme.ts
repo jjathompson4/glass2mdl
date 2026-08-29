@@ -70,6 +70,13 @@ export function buildReadme(options: {
     "is what lets a re-export show up without restarting Max. Old revisions",
     "left in the folder can be deleted.",
     "",
+    "OTHER RENDERERS",
+    "---------------",
+    "Only Iray+ 3.1 for 3ds Max 2024 is verified. The .mdl uses no",
+    "NVIDIA-specific extensions, so other MDL renderers like V-Ray",
+    "should load it via VRayMDLMtl, but this is not extensively tested",
+    "there. The apply script works with Iray+ materials only.",
+    "",
     "MATERIALS",
     "---------",
   );
