@@ -3,9 +3,12 @@
 import type { SolverWarning, ValidationIssue } from "@/engine";
 
 /** The name field sits back up in card 1, a long scroll from this banner, so
- * the missing-name error carries a jump that also focuses the input. */
+ * the missing-name error carries a jump that also focuses the input.
+ *
+ * Instant, not smooth: scrolling up re-expands the header's tagline, and that
+ * layout shift makes scroll anchoring cancel a smooth animation partway. */
 function jumpToName() {
-  document.getElementById("card-cutsheet")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  document.getElementById("card-cutsheet")?.scrollIntoView({ block: "start" });
   document
     .querySelector<HTMLInputElement>('input[aria-label="Product name"]')
     ?.focus({ preventScroll: true });
