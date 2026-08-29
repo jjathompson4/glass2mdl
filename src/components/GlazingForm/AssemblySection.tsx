@@ -39,7 +39,7 @@ export function AssemblySection() {
           Data sheet values
         </>
       }
-      description="The product name and the three visible-light values from the performance table. The tool fits each lite's material properties so the rendered assembly reproduces these numbers; warnings appear if the fit is unrealistic."
+      description="Enter the product name and the three visible-light values from the performance table. The tool fits each lite's material properties so the rendered assembly reproduces these numbers; warnings appear if the fit is unrealistic."
     >
       <div className="max-w-md">
         <Field label="Product name" hint="Used for the material and file names.">
