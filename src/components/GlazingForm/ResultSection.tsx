@@ -119,7 +119,7 @@ function FitTable({
 
   return (
     <div>
-      <div className="grid max-w-sm grid-cols-[1fr_76px_76px] gap-x-3 gap-y-1 text-xs text-muted">
+      <div className="grid max-w-sm grid-cols-[1fr_auto_auto] gap-x-3 gap-y-1 text-xs text-muted sm:grid-cols-[1fr_76px_76px]">
         <span />
         <span className="font-medium">entered</span>
         <span className="font-medium">produced</span>
@@ -188,7 +188,7 @@ function FitDetails({ derived }: { derived: DerivedOptics }) {
         each downloaded material:
       </p>
 
-      <div className="mt-2 grid grid-cols-[96px_1fr_86px] gap-x-3 gap-y-1.5 border-t border-border-subtle pt-2 text-xs">
+      <div className="mt-2 grid grid-cols-[auto_1fr_auto] gap-x-3 gap-y-1.5 border-t border-border-subtle pt-2 text-xs sm:grid-cols-[96px_1fr_86px]">
         <span />
         <span />
         <span className="font-medium text-muted/80">absorption</span>

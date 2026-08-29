@@ -13,10 +13,10 @@ export default function Home() {
           <div>
             <h1 className="text-base font-semibold tracking-tight">glass2mdl</h1>
             <HeaderMeta>
-              <p className="mt-0.5 text-xs text-muted">
+              <p className="mt-0.5 hidden text-xs text-muted sm:block">
                 Turn manufacturer glazing data into MDL materials for Iray in 3ds Max.
               </p>
-              <p className="mt-0.5 text-[11px] text-muted/80">
+              <p className="mt-0.5 hidden text-[11px] text-muted/80 sm:block">
                 MDL {MDL_VERSION}, compatible with Iray+ 3.1 for 3ds Max 2024
               </p>
             </HeaderMeta>

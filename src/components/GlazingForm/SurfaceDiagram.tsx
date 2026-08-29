@@ -1,12 +1,7 @@
 "use client";
 
-import {
-  SUBSTRATE_INTERNAL_T_6MM,
-  linearRGBToHex,
-  type GapInput,
-  type LiteInput,
-  type SurfaceNumber,
-} from "@/engine";
+import { type GapInput, type LiteInput, type SurfaceNumber } from "@/engine";
+import { substrateDisplayHex } from "@/lib/substrateTint";
 
 /**
  * Cross-section through the glazing, exterior on the left.
@@ -106,16 +101,6 @@ function layout(
 
 export type DiagramFeature = "coating" | "frit";
 
-/**
- * Panes are filled with their substrate's own transmitted color, so a green
- * or bronze lite reads as such at a glance and a mixed build-up is visibly
- * mixed. Drawn at half opacity over the panel surface so it works on both
- * themes.
- */
-function substrateHex(lite: LiteInput): string {
-  return linearRGBToHex(SUBSTRATE_INTERNAL_T_6MM[lite.substrate]);
-}
-
 export function SurfaceDiagram({
   lites,
   gaps,
@@ -195,8 +180,7 @@ export function SurfaceDiagram({
                 y={GLASS_TOP}
                 width={width}
                 height={GLASS_BOTTOM - GLASS_TOP}
-                fill={substrateHex(lite)}
-                fillOpacity={0.5}
+                fill={substrateDisplayHex(lite.substrate)}
                 stroke="var(--border-strong)"
                 strokeWidth={1}
                 rx={1}
@@ -266,6 +250,15 @@ export function SurfaceDiagram({
             className="cursor-pointer opacity-60 outline-none transition-opacity hover:opacity-100 focus:outline-none"
           >
             <rect
+              x={ghost.x - 8}
+              y={GLASS_TOP - 6}
+              width={ghost.width + 16}
+              height={GLASS_BOTTOM - GLASS_TOP + 30}
+              fill="var(--surface)"
+              fillOpacity={0.01}
+              style={{ pointerEvents: "all" }}
+            />
+            <rect
               x={ghost.x}
               y={GLASS_TOP}
               width={ghost.width}
@@ -300,8 +293,9 @@ export function SurfaceDiagram({
       </svg>
 
       <figcaption className="px-1 pb-0.5 pt-1 text-[11px] text-muted">
-        Drawn to scale, numbered from the exterior inward. Click a tag to edit a feature, or +
-        on a bare surface to add one.
+        Drawn to scale, numbered from the exterior inward; tint colors are deepened so they stay
+        visible — the download uses the true values. Click a tag to edit a feature, or + on a
+        bare surface to add one.
       </figcaption>
     </figure>
   );
@@ -344,8 +338,7 @@ export function MiniSection({
           y={3}
           width={w}
           height={30}
-          fill={substrateHex(lite)}
-          fillOpacity={0.5}
+          fill={substrateDisplayHex(lite.substrate)}
           stroke="var(--border-strong)"
           strokeWidth={1}
         />
@@ -420,6 +413,17 @@ function FeatureTag({
           : undefined
       }
     >
+      {onClick ? (
+        <rect
+          x={left - 6}
+          y={y - 15}
+          width={width + 12}
+          height={30}
+          fill="var(--surface)"
+          fillOpacity={0.01}
+          style={{ pointerEvents: "all" }}
+        />
+      ) : null}
       <rect
         x={left}
         y={y - 7.5}
@@ -520,6 +524,17 @@ function SurfaceMarker({
           }}
           className="cursor-pointer outline-none transition-opacity hover:opacity-70 focus:outline-none"
         >
+          {/* Invisible finger-sized target: the drawing renders at ~2/3 scale
+              on phones, and r=18 is the largest radius whose two circles don't
+              overlap across a 6mm pane. */}
+          <circle
+            cx={x}
+            cy={mid}
+            r={18}
+            fill="var(--surface)"
+            fillOpacity={0.01}
+            style={{ pointerEvents: "all" }}
+          />
           <circle
             cx={x}
             cy={mid}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useSyncExternalStore, type ReactNode } from "react";
 
 export type Theme = "light" | "dark" | "system";
 
@@ -51,10 +51,48 @@ function applyTheme(theme: Theme): void {
   window.dispatchEvent(new Event(EVENT));
 }
 
-const OPTIONS: { value: Theme; label: string; icon: string }[] = [
-  { value: "light", label: "Light", icon: "☀" },
-  { value: "dark", label: "Dark", icon: "☾" },
-  { value: "system", label: "System", icon: "◐" },
+/* Drawn by hand at 14px with currentColor: the Unicode glyphs (☀ ☾ ◐) take
+   emoji presentation in mobile browsers, and the VS15 text selector is
+   ignored by some Android emoji fonts, so glyphs cannot render reliably
+   monochrome. Stroke style matches VerdictChip's inline icons. */
+function SunIcon() {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      className="block h-3.5 w-3.5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.25}
+      strokeLinecap="round"
+      aria-hidden
+    >
+      <circle cx="8" cy="8" r="3.25" />
+      <path d="M8 1.5v1.8M8 12.7v1.8M1.5 8h1.8M12.7 8h1.8M3.4 3.4l1.3 1.3M11.3 11.3l1.3 1.3M12.6 3.4l-1.3 1.3M4.7 11.3l-1.3 1.3" />
+    </svg>
+  );
+}
+
+function MoonIcon() {
+  return (
+    <svg viewBox="0 0 16 16" className="block h-3.5 w-3.5" aria-hidden>
+      <path d="M13.2 9.7A5.6 5.6 0 0 1 6.3 2.8a5.6 5.6 0 1 0 6.9 6.9Z" fill="currentColor" />
+    </svg>
+  );
+}
+
+function SystemIcon() {
+  return (
+    <svg viewBox="0 0 16 16" className="block h-3.5 w-3.5" aria-hidden>
+      <circle cx="8" cy="8" r="5.75" fill="none" stroke="currentColor" strokeWidth={1.25} />
+      <path d="M8 2.25a5.75 5.75 0 0 1 0 11.5Z" fill="currentColor" />
+    </svg>
+  );
+}
+
+const OPTIONS: { value: Theme; label: string; icon: ReactNode }[] = [
+  { value: "light", label: "Light", icon: <SunIcon /> },
+  { value: "dark", label: "Dark", icon: <MoonIcon /> },
+  { value: "system", label: "System", icon: <SystemIcon /> },
 ];
 
 export function ThemeToggle() {
@@ -81,7 +119,7 @@ export function ThemeToggle() {
               selected ? "bg-surface text-foreground shadow-sm" : "text-muted hover:text-foreground"
             }`}
           >
-            <span aria-hidden>{option.icon}</span>
+            {option.icon}
           </button>
         );
       })}

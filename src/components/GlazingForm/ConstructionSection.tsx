@@ -9,6 +9,7 @@ import {
   type SubstrateTint,
 } from "@/engine";
 import { SUBSTRATE_ORDER, useAppStore } from "@/lib/store";
+import { substrateDisplayHex } from "@/lib/substrateTint";
 import { fromDisplay, toDisplay, unitLabel, unitStep } from "@/lib/units";
 import { ActionButton, Field, NumberInput, SegmentedControl, Select, Section } from "@/components/ui/fields";
 import { GlassColorPanel, Swatch } from "./GlassColorPanel";
@@ -61,8 +62,10 @@ export function ConstructionSection() {
         {system.lites.map((lite, index) => (
           <Fragment key={index}>
             <div className="rounded-md border border-border-subtle p-3">
-              <div className="grid grid-cols-[auto_1fr_1fr] items-end gap-3">
-                <span className="pb-1.5 text-xs font-semibold text-muted">Lite {index + 1}</span>
+              <div className="grid grid-cols-2 items-end gap-3 sm:grid-cols-[auto_1fr_1fr]">
+                <span className="col-span-2 text-xs font-semibold text-muted sm:col-span-1 sm:pb-1.5">
+                  Lite {index + 1}
+                </span>
                 <Field label={`Thickness (${unitLabel(unit)})`}>
                   <NumberInput
                     value={toDisplay(lite.thickness, unit)}
@@ -72,14 +75,24 @@ export function ConstructionSection() {
                   />
                 </Field>
                 <Field label="Substrate">
-                  <Select<SubstrateTint>
-                    value={lite.substrate}
-                    onChange={(substrate) => updateLite(index, { substrate })}
-                    options={SUBSTRATE_ORDER.map((tint) => ({
-                      value: tint,
-                      label: SUBSTRATE_LABELS[tint],
-                    }))}
-                  />
+                  <div className="flex items-center gap-2">
+                    <div className="min-w-0 flex-1">
+                      <Select<SubstrateTint>
+                        value={lite.substrate}
+                        onChange={(substrate) => updateLite(index, { substrate })}
+                        options={SUBSTRATE_ORDER.map((tint) => ({
+                          value: tint,
+                          label: SUBSTRATE_LABELS[tint],
+                        }))}
+                      />
+                    </div>
+                    <span
+                      aria-hidden
+                      title="Drawn with this color on the diagram"
+                      className="h-6 w-6 shrink-0 rounded border border-border-strong"
+                      style={{ background: substrateDisplayHex(lite.substrate) }}
+                    />
+                  </div>
                 </Field>
               </div>
             </div>

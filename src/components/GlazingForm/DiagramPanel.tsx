@@ -258,12 +258,15 @@ function CondensedBar({
         fritSurface={frit?.surface}
       />
 
+      {/* On phones the name and number strip give way, but the summary and
+          tags stay: the bar's job is telling you what you're building while
+          the cards are scrolled away. */}
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2">
-          <span className="truncate text-[13px] font-semibold text-foreground">
+          <span className="hidden truncate text-[13px] font-semibold text-foreground sm:inline">
             {system.name}
           </span>
-          <span className="hidden shrink-0 text-[11px] text-muted sm:inline">
+          <span className="min-w-0 truncate text-[11px] text-muted sm:shrink-0">
             {constructionSummary(system)}
           </span>
         </div>
@@ -291,9 +294,15 @@ function CondensedBar({
         ) : null}
       </div>
 
-      <div className="flex shrink-0 flex-col items-end gap-0.5">
-        <NumberStrip muted={estimated} />
-        <VerdictChip verdict={verdict} estimated={estimated} />
+      <div className="flex min-w-0 flex-col items-end gap-0.5 sm:shrink-0">
+        <div className="hidden sm:block">
+          <NumberStrip muted={estimated} />
+        </div>
+        {/* "estimated for this construction" annotates the number strip, so it
+            hides with it; a real fit verdict stands on its own. */}
+        <div className={estimated ? "hidden sm:block" : undefined}>
+          <VerdictChip verdict={verdict} estimated={estimated} />
+        </div>
       </div>
     </div>
   );

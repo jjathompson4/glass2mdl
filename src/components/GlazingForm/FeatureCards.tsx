@@ -51,7 +51,7 @@ export function CoatingCard({ derived }: { derived: DerivedOptics | null }) {
       borderClass="border-accent/50"
       onRemove={() => setCoating(coatedIndex, undefined)}
     >
-      <div className="grid grid-cols-[1fr_2fr] gap-3">
+      <div className="grid gap-3 sm:grid-cols-[1fr_2fr]">
         <Field label="Type">
           <Select<CoatingKind>
             value={coating.kind}
