@@ -25,88 +25,106 @@ export default function About() {
           Simulation-ready glazing materials, based on manufacturer data
         </h1>
 
-        <div className="mt-5 space-y-5 text-sm leading-relaxed text-foreground">
-          <p>
-            glass2mdl turns the numbers on a glazing manufacturer&apos;s data sheet into MDL
-            materials for Iray in 3ds Max. Glazing materials created with this tool transmit,
-            reflect, and absorb exactly the amount of light that the data sheet describes, and
-            it looks physically correct from both sides. Coated products keep their asymmetric
-            reflections. The fit check shows you the proof before you download.
-          </p>
-          <p>
-            You build the configuration exactly as the data sheet describes (lites, thicknesses,
-            substrates, coating placement, any frit) and type the three visible light values
-            from the performance table. The tool solves for per-lite material properties whose
-            rendered assembly, including the light bouncing between lites, reproduces those
-            numbers.
-          </p>
+        <div className="mt-5 space-y-6 text-sm leading-relaxed text-foreground">
+          <div className="space-y-5">
+            <p>
+              glass2mdl turns glazing manufacturer&apos;s data into MDL materials for use with
+              Iray in 3ds Max. Glazing materials created with this tool transmit, reflect, and
+              absorb exactly the amount of light that the data sheet describes, and it looks
+              physically correct from both sides. Coated products keep their asymmetric
+              reflections. The fit check shows you the proof before you download.
+            </p>
+            <p>
+              You build the configuration exactly as the data sheet describes (lites,
+              thicknesses, substrates, coating placement, any frit) and type the three visible
+              light values from the performance table. The tool solves for per-lite material
+              properties whose rendered assembly, including the light bouncing between lites,
+              reproduces those numbers.
+            </p>
+          </div>
 
-          <h2 className="pt-2 text-base font-semibold">Outputs</h2>
-          <p>
-            <span className="font-medium">Planar geometry</span>: one material for openings
-            modeled as flat planes.
-          </p>
-          <p>
-            <span className="font-medium">Solid lites geometry</span>: each lite as a real
-            solid with per-face surfaces, so reflections stack the way real insulated units
-            do. That ZIP includes a 3ds Max script that finds your glazing, tags its faces,
-            and assigns every material for you.
-          </p>
+          <section className="space-y-4 border-t border-border-subtle pt-5">
+            <h2 className="text-base font-semibold">Outputs</h2>
+            <p>
+              <span className="font-medium">Planar geometry</span>: Create one material for
+              openings modeled as flat planes.
+            </p>
+            <p>
+              <span className="font-medium">Solid lites geometry</span>: Creates a
+              multi-material construction for use when each lite is modeled as a real solid, so
+              reflections stack the way real insulated units do. That ZIP includes a 3ds Max
+              script that finds your glazing, tags its faces, and assigns every material for
+              you.
+            </p>
+          </section>
 
-          <h2 className="pt-2 text-base font-semibold">Honesty</h2>
-          <p>
-            This is visible-light physics for rendering and point-in-time calculations, not
-            thermal or annual daylight analysis. Glass color is a physically sensible estimate
-            from your substrate choice. Accuracy can be improved by entering the color data
-            from a manufacturer data sheet.
-          </p>
+          <section className="space-y-4 border-t border-border-subtle pt-5">
+            <h2 className="text-base font-semibold">Honesty</h2>
+            <p>
+              This tool outputs material assets for studies requiring accurate visible-light
+              physics for rendering and point-in-time calculations, not thermal or annual
+              daylight analysis. Default glass color options are a physically sensible estimate
+              from your substrate choice. Accuracy can be improved by entering the color data
+              from a manufacturer data sheet.
+            </p>
+          </section>
 
-          <h2 className="pt-2 text-base font-semibold">Limitations, for now</h2>
-          <ul className="list-disc space-y-2 pl-5">
-            <li>
-              One coating per glazing unit. If your product has two coatings, the exported
-              glass still matches the data sheet numbers overall; you just cannot set the
-              second coating up separately yet. Support for that is planned.
-            </li>
-            <li>
-              One frit pattern, on one surface. In the solid lites workflow the frit comes as
-              its own material: in 3ds Max, you make a thin plane just in front of the fritted
-              surface and apply it there yourself. The script does not do this part.
-            </li>
-            <li>
-              Data sheets report light at straight-on incidence only, so behavior at glancing
-              angles follows a standard falloff curve rather than measured data.
-            </li>
-            <li>
-              Color is representative, not measured. The tool matches your data sheet&apos;s
-              three visible light values exactly, but it works in red, green, and blue rather
-              than the full light spectrum, and the hue comes from your substrate choice.
-              Import of measured spectra from the LBNL International Glazing Database is
-              planned.
-            </li>
-            <li>
-              Outputs are tested in Iray+ 3.1 for 3ds Max 2024. The materials are plain MDL 1.6
-              with no NVIDIA-specific extensions, so other MDL renderers like V-Ray should be
-              able to load them via VRayMDLMtl, but we have not tested them extensively yet. The
-              bundled apply script sets up Iray+ materials only.
-            </li>
-          </ul>
+          <section className="space-y-4 border-t border-border-subtle pt-5">
+            <h2 className="text-base font-semibold">Limitations, for now</h2>
+            <ul className="list-disc space-y-2 pl-5">
+              <li>
+                Outputs are mainly intended for use in Iray+ 3.1 for 3ds Max 2024. However, the
+                outputs are plain MDL 1.6 with no NVIDIA-specific extensions, so other MDL
+                renderers like V-Ray should be able to load them (via VRayMDLMtl), but we have
+                not tested this extensively yet. The bundled apply script sets up Iray+
+                materials only.
+              </li>
+              <li>
+                One coating per glazing unit. If your product has two coatings, the exported
+                glass still matches the data sheet numbers overall; you just cannot set the
+                second coating up separately yet. Support for that is planned.
+              </li>
+              <li>
+                One frit pattern, on one surface. In the solid lites workflow the frit comes as
+                its own material: in 3ds Max, you make a thin plane just in front of the fritted
+                surface and apply it there yourself. The script does not handle this, currently.
+              </li>
+              <li>
+                Data sheets report light at straight-on incidence only, so behavior at glancing
+                angles follows a standard falloff curve rather than measured data.
+              </li>
+              <li>
+                Default color settings are representative, not measured. The tool fits the
+                output materials to your data sheet&apos;s visible light values as accurately as
+                possible. Accuracy can be improved by entering exact color data from the
+                manufacturer, when available.
+              </li>
+              <li>
+                Currently the output materials are RGB-based rather than the full light
+                spectrum, and the hue comes from your substrate choice. Improved accuracy via
+                spectral rendering support and LBNL International Glazing Database compatibility
+                is planned.
+              </li>
+            </ul>
+          </section>
 
-          <h2 className="pt-2 text-base font-semibold">Built by</h2>
-          <p>
-            Jeff has 10 years of experience in lighting design, architectural visualization,
-            and daylight analysis. More experiments at{" "}
-            <a href="https://thompsonjeff.com" className="text-accent transition hover:opacity-80">
-              thompsonjeff.com
-            </a>
-            ; questions or bugs to{" "}
-            <a href="mailto:jt@thompsonjeff.com" className="text-accent transition hover:opacity-80">
-              jt@thompsonjeff.com
-            </a>
-            .
-          </p>
+          <section className="space-y-4 border-t border-border-subtle pt-5">
+            <h2 className="text-base font-semibold">Built by</h2>
+            <p>
+              Jeff has 10 years of experience in lighting design, architectural visualization,
+              and daylight analysis. More experiments at{" "}
+              <a href="https://thompsonjeff.com" className="text-accent transition hover:opacity-80">
+                thompsonjeff.com
+              </a>
+              ; questions or bugs to{" "}
+              <a href="mailto:jt@thompsonjeff.com" className="text-accent transition hover:opacity-80">
+                jt@thompsonjeff.com
+              </a>
+              .
+            </p>
+          </section>
 
-          <p className="pt-2">
+          <p className="border-t border-border-subtle pt-5">
             <Link
               href="/"
               className="font-medium text-accent transition hover:opacity-80"
