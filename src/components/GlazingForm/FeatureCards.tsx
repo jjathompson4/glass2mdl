@@ -72,7 +72,7 @@ export function CoatingCard({ derived }: { derived: DerivedOptics | null }) {
       </div>
 
       <p className="mt-2 text-xs leading-snug text-muted">
-        Says where the reflection asymmetry lives; low-e is usually #2. Only one coating is
+        Determines where the reflection asymmetry lives; low-e is usually #2. Only one coating is
         fitted at a time, since the three measured numbers can only pin down one coating&apos;s
         unknowns. A product with a second coating still exports correctly: the numbers describe
         the finished assembly either way.

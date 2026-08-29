@@ -2,16 +2,47 @@
 
 import type { SolverWarning, ValidationIssue } from "@/engine";
 
+/** Smooth scroll the window toward a target that may move. Scrolling up
+ * re-expands the header's tagline, and that layout shift makes the browser
+ * cancel its own smooth scrollIntoView via scroll anchoring — so this drives
+ * the animation frame by frame, re-reading the target as layout shifts.
+ * Real user input (wheel, touch) hands control back immediately. */
+function animateScrollTo(target: () => number) {
+  let raf = 0;
+  let last = performance.now();
+  const stop = () => {
+    cancelAnimationFrame(raf);
+    window.removeEventListener("wheel", stop);
+    window.removeEventListener("touchstart", stop);
+  };
+  window.addEventListener("wheel", stop, { passive: true });
+  window.addEventListener("touchstart", stop, { passive: true });
+  const step = (now: number) => {
+    const dt = Math.min(64, now - last);
+    last = now;
+    const remaining = target() - window.scrollY;
+    if (Math.abs(remaining) <= 1) {
+      window.scrollTo(0, target());
+      stop();
+      return;
+    }
+    // Exponential approach; dt-scaled so the pace survives dropped frames.
+    window.scrollBy(0, remaining * (1 - Math.exp(-dt / 100)));
+    raf = requestAnimationFrame(step);
+  };
+  raf = requestAnimationFrame(step);
+}
+
 /** The name field sits back up in card 1, a long scroll from this banner, so
- * the missing-name error carries a jump that also focuses the input.
- *
- * Instant, not smooth: scrolling up re-expands the header's tagline, and that
- * layout shift makes scroll anchoring cancel a smooth animation partway. */
+ * the missing-name error carries a jump that also focuses the input. */
 function jumpToName() {
-  document.getElementById("card-cutsheet")?.scrollIntoView({ block: "start" });
+  const card = document.getElementById("card-cutsheet");
+  if (!card) return;
   document
     .querySelector<HTMLInputElement>('input[aria-label="Product name"]')
     ?.focus({ preventScroll: true });
+  // 128px clears the sticky header + condensed bar (the cards' scroll-mt-32).
+  animateScrollTo(() => Math.max(0, window.scrollY + card.getBoundingClientRect().top - 128));
 }
 
 export function ValidationBanner({
