@@ -2,6 +2,15 @@
 
 import type { SolverWarning, ValidationIssue } from "@/engine";
 
+/** The name field sits back up in card 1, a long scroll from this banner, so
+ * the missing-name error carries a jump that also focuses the input. */
+function jumpToName() {
+  document.getElementById("card-cutsheet")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  document
+    .querySelector<HTMLInputElement>('input[aria-label="Product name"]')
+    ?.focus({ preventScroll: true });
+}
+
 export function ValidationBanner({
   issues,
   warnings,
@@ -19,7 +28,21 @@ export function ValidationBanner({
       {errors.length ? (
         <Callout tone="danger" title={errors.length === 1 ? "Fix before downloading" : `${errors.length} things to fix before downloading`}>
           {errors.map((issue) => (
-            <li key={issue.code + issue.field}>{issue.message}</li>
+            <li key={issue.code + issue.field}>
+              {issue.message}
+              {issue.code === "name-required" ? (
+                <>
+                  {" "}
+                  <button
+                    type="button"
+                    onClick={jumpToName}
+                    className="font-semibold underline underline-offset-2 transition hover:opacity-80"
+                  >
+                    Go to the name field
+                  </button>
+                </>
+              ) : null}
+            </li>
           ))}
         </Callout>
       ) : null}
