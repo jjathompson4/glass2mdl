@@ -137,7 +137,7 @@ export function solveVolumetric(input: GlazingSystemInput): SolveOutput {
     }
     if (isPainted && input.spandrel?.kind === "flood-coat") {
       notes.push(
-        `Flood coat on surface #${input.spandrel.surface}: Material ID 2 (the interior face, ${INTERIOR_FACE_PARAM} on) renders the opaque paint in place of the glass; IDs 1 and 3 stay glass. The bundled manifest sets the parameter per ID.`,
+        `Flood coat on surface #${input.spandrel.surface}, the interior-facing face of this lite. On this solid that face is Material ID 2 (${INTERIOR_FACE_PARAM} on): it renders the opaque paint in place of the glass, while ID 1 (exterior face) and ID 3 (edges) stay glass. The bundled manifest sets the parameter per ID.`,
         `Seen from outside through this build-up the panel reads as ${readsAs}; the finish colour is taken as given, since no data sheet measures it.`,
       );
     } else if (paintedLite >= 0 && i > paintedLite) {

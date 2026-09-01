@@ -28,7 +28,7 @@ import ::df::*;
 // Notes:
 //   - Apply to lite 1 of 1, modeled as a 6mm thick solid.
 //   - Absorption is per meter of travel, so the solid's real thickness must match the value above.
-//   - Flood coat on surface #2: Material ID 2 (the interior face, interior_face on) renders the opaque paint in place of the glass; IDs 1 and 3 stay glass. The bundled manifest sets the parameter per ID.
+//   - Flood coat on surface #2, the interior-facing face of this lite. On this solid that face is Material ID 2 (interior_face on): it renders the opaque paint in place of the glass, while ID 1 (exterior face) and ID 3 (edges) stay glass. The bundled manifest sets the parameter per ID.
 //   - Seen from outside through this build-up the panel reads as 10.4%; the finish colour is taken as given, since no data sheet measures it.
 
 export material flood_coat_monolithic_monolithic(

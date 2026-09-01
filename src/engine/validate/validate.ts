@@ -1,4 +1,4 @@
-import { maxSurface } from "../physics/assembly";
+import { locateSurface, maxSurface } from "../physics/assembly";
 import { impliedLuminance } from "../physics/colorimetry";
 import type { ColorSpec } from "../types/color";
 import type { ValidationIssue } from "../types/issues";
@@ -298,11 +298,12 @@ export function validateForMode(
   }
 
   if (input.spandrel?.kind === "flood-coat") {
+    const surface = input.spandrel.surface;
+    const lite = Math.min(locateSurface(surface).lite, input.lites.length - 1) + 1;
     issues.push({
       severity: "warning",
       code: "volumetric-spandrel-setup",
-      message:
-        "The flood-coated lite renders the paint on face ID 2 only (interior_face on in that slot); IDs 1 and 3 stay glass. The bundled bind manifest sets this up through the apply script.",
+      message: `Surface #${surface} is the interior-facing face of lite ${lite}. On that lite's solid it is Material ID 2 (each lite's solid uses ID 1 for its exterior face, ID 2 for its interior face, ID 3 for edges), so the paint renders there and the rest of the lite stays glass. The bundled bind manifest sets this up through the apply script.`,
       field: "spandrel.surface",
     });
   }

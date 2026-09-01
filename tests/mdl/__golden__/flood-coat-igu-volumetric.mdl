@@ -89,7 +89,7 @@ export material flood_coat_igu_outer(
 // Notes:
 //   - Apply to lite 2 of 2, modeled as a 6mm thick solid.
 //   - Absorption is per meter of travel, so the solid's real thickness must match the value above.
-//   - Flood coat on surface #4: Material ID 2 (the interior face, interior_face on) renders the opaque paint in place of the glass; IDs 1 and 3 stay glass. The bundled manifest sets the parameter per ID.
+//   - Flood coat on surface #4, the interior-facing face of this lite. On this solid that face is Material ID 2 (interior_face on): it renders the opaque paint in place of the glass, while ID 1 (exterior face) and ID 3 (edges) stay glass. The bundled manifest sets the parameter per ID.
 //   - Seen from outside through this build-up the panel reads as 12.5%; the finish colour is taken as given, since no data sheet measures it.
 
 export material flood_coat_igu_inner(

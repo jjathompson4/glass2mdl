@@ -139,9 +139,10 @@ export function buildReadme(options: {
       }
       if (i === paintedLite && spandrel?.kind === "flood-coat") {
         lines.push(
-          `      Flood coat on surface #${spandrel.surface}: Material ID 2 (the interior`,
-          "      face, interior_face on) renders the opaque paint; IDs 1 and 3",
-          "      stay glass. The apply script sets the parameter per ID.",
+          `      Flood coat on surface #${spandrel.surface}, this lite's interior-facing`,
+          "      face. On this solid that face is Material ID 2 (interior_face",
+          "      on), which renders the opaque paint; ID 1 (exterior face) and",
+          "      ID 3 (edges) stay glass. The apply script sets it per ID.",
         );
       } else if (paintedLite >= 0 && i > paintedLite) {
         lines.push("      Behind the flood coat; never visible from outside.");
