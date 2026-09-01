@@ -7,11 +7,12 @@ import {
   type DerivedOptics,
   type SurfaceNumber,
 } from "@/engine";
-import { defaultFrit, useAppStore } from "@/lib/store";
+import { defaultFrit, defaultSpandrel, useAppStore } from "@/lib/store";
 import { surfaceOptions } from "@/lib/surfaces";
 import { ActionButton, Field, Select } from "@/components/ui/fields";
 import { CoatingOverridesPanel } from "./CoatingPanel";
 import { FritControls } from "./FritSection";
+import { SpandrelControls } from "./SpandrelSection";
 
 /**
  * Coating and frit are the same kind of thing — a feature on one numbered
@@ -143,6 +144,31 @@ export function FritCard() {
   );
 }
 
+export function SpandrelCard({ derived }: { derived: DerivedOptics | null }) {
+  const spandrel = useAppStore((s) => s.system.spandrel);
+  const setSpandrel = useAppStore((s) => s.setSpandrel);
+
+  if (!spandrel) return null;
+
+  return (
+    <FeatureCardShell
+      id="card-spandrel"
+      title="Spandrel finish"
+      number={3}
+      squareClass="bg-spandrel"
+      borderClass="border-spandrel/50"
+      onRemove={() => setSpandrel(undefined)}
+    >
+      <p className="mb-3 text-xs leading-snug text-muted">
+        Same glass, made opaque: a flood coat painted on the back of a lite, or a metal pan behind
+        an air cavity. The data sheet values above still describe the glass; only the finish is
+        new.
+      </p>
+      <SpandrelControls derived={derived} />
+    </FeatureCardShell>
+  );
+}
+
 function FeatureCardShell({
   id,
   title,
@@ -184,19 +210,45 @@ function FeatureCardShell({
 export function SurfaceFeaturesGhost() {
   const system = useAppStore((s) => s.system);
   const setFrit = useAppStore((s) => s.setFrit);
+  const setSpandrel = useAppStore((s) => s.setSpandrel);
   const moveCoatingToSurface = useAppStore((s) => s.moveCoatingToSurface);
 
   const hasCoating = system.lites.some((l) => l.coating);
   const hasFrit = Boolean(system.frit);
-  if (hasCoating && hasFrit) return null;
+  const hasSpandrel = Boolean(system.spandrel);
 
   const addCoating = () => moveCoatingToSurface(system.lites.length > 1 ? 2 : 1);
   const addFrit = () =>
     setFrit(defaultFrit(system.lites.length > 1 ? 2 : 1, { r: 0.9, g: 0.9, b: 0.88 }));
+  const addSpandrel = () => setSpandrel(defaultSpandrel("flood-coat", system.lites.length));
 
-  // Neither feature yet: this ghost IS card 3. One feature present: its real
-  // card carries the number and this shrinks to a one-line add row.
-  if (!hasCoating && !hasFrit) {
+  // Frit and a spandrel finish exclude each other: the finish already covers
+  // the whole panel. So the offer list shrinks as features are added.
+  const offers: { label: string; blurb: string; onClick: () => void }[] = [];
+  if (!hasCoating) {
+    offers.push({
+      label: "Add coating",
+      blurb: "Most performance glazing is coated. Leave it off only for plain tinted or clear glass.",
+      onClick: addCoating,
+    });
+  }
+  if (!hasFrit && !hasSpandrel) {
+    offers.push({
+      label: "Add frit",
+      blurb: "Frit: ceramic enamel fused to one surface, as dots, lines, or your own pattern file.",
+      onClick: addFrit,
+    });
+    offers.push({
+      label: "Make it a spandrel",
+      blurb: "Spandrel: the same glass with an opaque flood coat or a back pan behind it.",
+      onClick: addSpandrel,
+    });
+  }
+  if (!offers.length) return null;
+
+  // No feature yet: this ghost IS card 3. Otherwise a real card carries the
+  // number and this shrinks to a one-line add row.
+  if (!hasCoating && !hasFrit && !hasSpandrel) {
     return (
       <section className="scroll-mt-32 rounded-lg border border-dashed border-border-strong/60 p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -207,13 +259,14 @@ export function SurfaceFeaturesGhost() {
               Surface features
             </p>
             <p className="mt-0.5 text-xs text-muted">
-              Coating and frit sit on a numbered surface. Most performance glazing has a
-              coating.
+              Coating and frit sit on a numbered surface; a spandrel finish sits behind the
+              glass. Most performance glazing has a coating.
             </p>
           </div>
-          <div className="flex shrink-0 gap-2">
-            <GhostButton label="Add coating" onClick={addCoating} />
-            <GhostButton label="Add frit" onClick={addFrit} />
+          <div className="flex shrink-0 flex-wrap gap-2">
+            {offers.map((offer) => (
+              <GhostButton key={offer.label} label={offer.label} onClick={offer.onClick} />
+            ))}
           </div>
         </div>
       </section>
@@ -223,15 +276,12 @@ export function SurfaceFeaturesGhost() {
   return (
     <section className="scroll-mt-32 rounded-lg border border-dashed border-border-strong/60 px-4 py-2.5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-xs text-muted">
-          {hasCoating
-            ? "Frit: ceramic enamel fused to one surface, as dots, lines, or your own pattern file."
-            : "Most performance glazing is coated. Leave it off only for plain tinted or clear glass."}
-        </p>
-        <GhostButton
-          label={hasCoating ? "Add frit" : "Add coating"}
-          onClick={hasCoating ? addFrit : addCoating}
-        />
+        <p className="text-xs text-muted">{offers[0].blurb}</p>
+        <div className="flex shrink-0 flex-wrap gap-2">
+          {offers.map((offer) => (
+            <GhostButton key={offer.label} label={offer.label} onClick={offer.onClick} />
+          ))}
+        </div>
       </div>
     </section>
   );

@@ -173,6 +173,7 @@ function FitRow({
 
 function FitDetails({ derived }: { derived: DerivedOptics }) {
   const lites = useAppStore((s) => s.system.lites);
+  const spandrel = useAppStore((s) => s.system.spandrel);
   const unit = useAppStore((s) => s.unit);
   const positions = litePositionNames(lites.length);
   const coating = derived.coating;
@@ -210,6 +211,18 @@ function FitDetails({ derived }: { derived: DerivedOptics }) {
               transmits {(luminance(coating.transmission) * 100).toFixed(0)}% · reflects{" "}
               {(luminance(coating.reflectanceExt) * 100).toFixed(0)}% out /{" "}
               {(luminance(coating.reflectanceInt) * 100).toFixed(0)}% in
+            </span>
+            <span />
+          </>
+        ) : null}
+        {spandrel && derived.spandrel ? (
+          <>
+            <span className="font-medium text-foreground">
+              {spandrel.kind === "flood-coat" ? `Flood coat · #${spandrel.surface}` : "Back pan"}
+            </span>
+            <span className="text-muted">
+              opaque · reads as {(luminance(derived.spandrel.readsAs) * 100).toFixed(1)}% from
+              outside, glass alone {(luminance(derived.spandrel.glassOnly) * 100).toFixed(1)}%
             </span>
             <span />
           </>

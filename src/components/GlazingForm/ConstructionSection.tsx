@@ -10,7 +10,7 @@ import {
 } from "@/engine";
 import { SUBSTRATE_ORDER, useAppStore } from "@/lib/store";
 import { substrateDisplayHex } from "@/lib/substrateTint";
-import { fromDisplay, toDisplay, unitLabel, unitStep } from "@/lib/units";
+import { formatLength, fromDisplay, toDisplay, unitLabel, unitStep } from "@/lib/units";
 import { ActionButton, Field, NumberInput, SegmentedControl, Select, Section } from "@/components/ui/fields";
 import { GlassColorPanel, Swatch } from "./GlassColorPanel";
 
@@ -19,27 +19,56 @@ import { GlassColorPanel, Swatch } from "./GlassColorPanel";
  * exterior-to-interior sandwich. Editing stays in the feature's own card —
  * this row only points there.
  */
-function FeatureRow({ kind, surface }: { kind: "coating" | "frit"; surface: number }) {
-  const isCoating = kind === "coating";
+type StackFeature = "coating" | "frit" | "flood-coat" | "back-pan";
+
+const FEATURE_STYLE: Record<
+  StackFeature,
+  { card: string; box: string; square: string; text: string; label: string }
+> = {
+  coating: {
+    card: "card-coating",
+    box: "border-accent/50 bg-accent-soft",
+    square: "bg-accent",
+    text: "text-accent",
+    label: "Coating",
+  },
+  frit: {
+    card: "card-frit",
+    box: "border-warning/50 bg-warning-soft",
+    square: "bg-warning",
+    text: "text-warning",
+    label: "Frit",
+  },
+  "flood-coat": {
+    card: "card-spandrel",
+    box: "border-spandrel/50 bg-spandrel-soft",
+    square: "bg-spandrel",
+    text: "text-spandrel",
+    label: "Flood coat",
+  },
+  "back-pan": {
+    card: "card-spandrel",
+    box: "border-spandrel/50 bg-spandrel-soft",
+    square: "bg-spandrel",
+    text: "text-spandrel",
+    label: "Back pan",
+  },
+};
+
+function FeatureRow({ kind, detail }: { kind: StackFeature; detail: string }) {
+  const style = FEATURE_STYLE[kind];
   return (
     <button
       type="button"
-      aria-label={`Go to the ${kind} card`}
+      aria-label={`Go to the ${style.label.toLowerCase()} card`}
       onClick={() =>
-        document
-          .getElementById(isCoating ? "card-coating" : "card-frit")
-          ?.scrollIntoView({ behavior: "smooth", block: "start" })
+        document.getElementById(style.card)?.scrollIntoView({ behavior: "smooth", block: "start" })
       }
-      className={`flex w-full items-center gap-2 rounded-md border px-3 py-1.5 text-left transition hover:opacity-80 ${
-        isCoating ? "border-accent/50 bg-accent-soft" : "border-warning/50 bg-warning-soft"
-      }`}
+      className={`flex w-full items-center gap-2 rounded-md border px-3 py-1.5 text-left transition hover:opacity-80 ${style.box}`}
     >
-      <span
-        className={`h-2.5 w-2.5 shrink-0 rounded-sm ${isCoating ? "bg-accent" : "bg-warning"}`}
-        aria-hidden
-      />
-      <span className={`text-xs font-semibold ${isCoating ? "text-accent" : "text-warning"}`}>
-        {isCoating ? "Coating" : "Frit"} · #{surface}
+      <span className={`h-2.5 w-2.5 shrink-0 rounded-sm ${style.square}`} aria-hidden />
+      <span className={`text-xs font-semibold ${style.text}`}>
+        {style.label} · {detail}
       </span>
       <span className="ml-auto shrink-0 text-[11px] text-muted">edit below ↓</span>
     </button>
@@ -59,10 +88,14 @@ export function ConstructionSection() {
   const coating = system.lites.find((l) => l.coating)?.coating;
   const coatingHue = coating?.reflectedColor ?? gray(1);
   const frit = system.frit;
+  const spandrel = system.spandrel;
   // Coating before frit when both sit on one surface, matching the diagram.
-  const featuresOn = (surface: number): ("coating" | "frit")[] => [
+  const featuresOn = (surface: number): StackFeature[] => [
     ...(coating?.surface === surface ? (["coating"] as const) : []),
     ...(frit?.surface === surface ? (["frit"] as const) : []),
+    ...(spandrel?.kind === "flood-coat" && spandrel.surface === surface
+      ? (["flood-coat"] as const)
+      : []),
   ];
   const adjustedCount = [
     system.assembly.transmittedColor,
@@ -98,7 +131,7 @@ export function ConstructionSection() {
         {system.lites.map((lite, index) => (
           <Fragment key={index}>
             {featuresOn(index * 2 + 1).map((kind) => (
-              <FeatureRow key={kind} kind={kind} surface={index * 2 + 1} />
+              <FeatureRow key={kind} kind={kind} detail={`#${index * 2 + 1}`} />
             ))}
 
             <div className="rounded-md border border-border-subtle p-3">
@@ -138,7 +171,7 @@ export function ConstructionSection() {
             </div>
 
             {featuresOn(index * 2 + 2).map((kind) => (
-              <FeatureRow key={kind} kind={kind} surface={index * 2 + 2} />
+              <FeatureRow key={kind} kind={kind} detail={`#${index * 2 + 2}`} />
             ))}
 
             {/* The cavity gets its own slim card between the lites, sunken so
@@ -161,6 +194,17 @@ export function ConstructionSection() {
             ) : null}
           </Fragment>
         ))}
+
+        {/* The pan is the last element of the stack: an air cavity, then metal. */}
+        {spandrel?.kind === "back-pan" ? (
+          <>
+            <div className="flex items-center gap-3 rounded-md border border-border-subtle bg-surface-sunken px-3 py-2">
+              <span className="text-xs font-semibold text-muted">Air cavity</span>
+              <span className="text-xs text-muted">{formatLength(spandrel.cavity, unit)}</span>
+            </div>
+            <FeatureRow kind="back-pan" detail={spandrel.finish === "metallic" ? "metallic" : "painted"} />
+          </>
+        ) : null}
       </div>
 
       {/* The color lives with the construction because the substrate choice is
@@ -201,6 +245,9 @@ export function ConstructionSection() {
           VLT and the two reflectance values set the brightness; the substrate menu supplies
           a representative hue. If the data sheet lists color data, click Adjust and enter it.
           Measured colors from the LBNL International Glazing Database are coming soon.
+          {spandrel
+            ? " These describe the glass alone; the Spandrel finish card shows what the panel reads as once the finish sits behind it."
+            : null}
         </p>
 
         {colorOpen ? (

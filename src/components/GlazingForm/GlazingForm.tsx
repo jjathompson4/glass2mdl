@@ -12,7 +12,7 @@ import { useAppStore } from "@/lib/store";
 import { AssemblySection } from "./AssemblySection";
 import { ConstructionSection } from "./ConstructionSection";
 import { DiagramPanel } from "./DiagramPanel";
-import { CoatingCard, FritCard, SurfaceFeaturesGhost } from "./FeatureCards";
+import { CoatingCard, FritCard, SpandrelCard, SurfaceFeaturesGhost } from "./FeatureCards";
 import { RenderingSection } from "./RenderingSection";
 import { ResultSection } from "./ResultSection";
 import { ValidationBanner } from "./ValidationBanner";
@@ -63,6 +63,7 @@ export function GlazingForm() {
         <ConstructionSection />
         <CoatingCard derived={solved?.derived ?? null} />
         <FritCard />
+        <SpandrelCard derived={solved?.derived ?? null} />
         <SurfaceFeaturesGhost />
         <RenderingSection />
         <ValidationBanner issues={modeIssues} warnings={solved?.warnings ?? []} />

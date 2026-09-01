@@ -14,6 +14,7 @@ import {
   type LiteInput,
   type RGB,
   type RollerWaveInput,
+  type SpandrelInput,
   type SubstrateTint,
   type SurfaceNumber,
 } from "@/engine";
@@ -74,6 +75,10 @@ const defaultSystem = (): GlazingSystemInput => {
   };
 };
 
+export type SpandrelPatch =
+  | Partial<Extract<SpandrelInput, { kind: "flood-coat" }>>
+  | Partial<Extract<SpandrelInput, { kind: "back-pan" }>>;
+
 export interface AppState {
   system: GlazingSystemInput;
   mode: ExportMode;
@@ -95,6 +100,9 @@ export interface AppState {
   moveCoatingToSurface: (surface: SurfaceNumber) => void;
   setFrit: (frit: FritInput | undefined) => void;
   setRollerWave: (rollerWave: RollerWaveInput | undefined) => void;
+  setSpandrel: (spandrel: SpandrelInput | undefined) => void;
+  /** Patch the current finish in place; the kind is switched via setSpandrel. */
+  updateSpandrel: (patch: SpandrelPatch) => void;
   updateFrit: (patch: Partial<FritInput>) => void;
   setFritPattern: (pattern: FritPattern) => void;
   setUploadedMask: (texture: UploadedTexture | undefined) => void;
@@ -133,11 +141,17 @@ export const useAppStore = create<AppState>((set) => ({
         s.system.frit && s.system.frit.surface > highest
           ? { ...s.system.frit, surface: highest as SurfaceNumber }
           : s.system.frit;
+      // A flood coat follows the last surface: it is the back of the
+      // innermost lite by definition, and `highest` is always a back face.
+      const spandrel =
+        s.system.spandrel?.kind === "flood-coat" && s.system.spandrel.surface > highest
+          ? { ...s.system.spandrel, surface: highest as SurfaceNumber }
+          : s.system.spandrel;
 
       const assembly = s.assemblyEdited
         ? s.system.assembly
         : seededAssembly(cleaned, s.system.assembly);
-      return { system: { ...s.system, lites: cleaned, gaps, frit, assembly } };
+      return { system: { ...s.system, lites: cleaned, gaps, frit, spandrel, assembly } };
     }),
 
   updateLite: (index, patch) =>
@@ -196,6 +210,15 @@ export const useAppStore = create<AppState>((set) => ({
 
   setRollerWave: (rollerWave) => set((s) => ({ system: { ...s.system, rollerWave } })),
 
+  setSpandrel: (spandrel) => set((s) => ({ system: { ...s.system, spandrel } })),
+
+  updateSpandrel: (patch) =>
+    set((s) => ({
+      system: s.system.spandrel
+        ? { ...s.system, spandrel: { ...s.system.spandrel, ...patch } as SpandrelInput }
+        : s.system,
+    })),
+
   updateFrit: (patch) =>
     set((s) => ({
       system: s.system.frit ? { ...s.system, frit: { ...s.system.frit, ...patch } } : s.system,
@@ -216,6 +239,22 @@ export const useAppStore = create<AppState>((set) => ({
 
   loadSystem: (system) => set({ system }),
 }));
+
+/** A dark neutral finish, the safe first guess for a spandrel. */
+export const DEFAULT_FINISH_HEX = "#4a4d4f";
+
+/** Starting point when a build-up becomes a spandrel. */
+export function defaultSpandrel(
+  kind: SpandrelInput["kind"],
+  liteCount: number,
+  surface?: SurfaceNumber,
+): SpandrelInput {
+  const color = { kind: "srgb", hex: DEFAULT_FINISH_HEX } as const;
+  if (kind === "flood-coat") {
+    return { kind, surface: surface ?? ((liteCount * 2) as SurfaceNumber), color };
+  }
+  return { kind, cavity: mm(100), color, finish: "matte" };
+}
 
 /** Starting point when frit is switched on. */
 export function defaultFrit(surface: SurfaceNumber, color: RGB): FritInput {

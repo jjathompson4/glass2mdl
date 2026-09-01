@@ -1,6 +1,6 @@
 "use client";
 
-import { type GapInput, type LiteInput, type SurfaceNumber } from "@/engine";
+import { type GapInput, type LiteInput, type SpandrelInput, type SurfaceNumber } from "@/engine";
 import { substrateDisplayHex } from "@/lib/substrateTint";
 
 /**
@@ -34,6 +34,15 @@ const REFERENCE_SPAN_MM = 68;
 /** Keeps a thin lite visible even at true scale. */
 const MIN_PANE_PX = 9;
 
+/**
+ * A shadow-box cavity is drawn no deeper than this, with the real depth in
+ * the label: a 100mm cavity at true scale would squash every lite to the
+ * minimum and the section would stop reading as glass.
+ */
+const MAX_DRAWN_CAVITY_MM = 16;
+/** The pan is sheet metal; drawn as a thin bar regardless of scale. */
+const PAN_PX = 4;
+
 interface PaneLayout {
   x: number;
   width: number;
@@ -44,6 +53,8 @@ interface PaneLayout {
 interface Layout {
   panes: PaneLayout[];
   gapSpans: { start: number; end: number; width: number }[];
+  /** Back pan: the cavity span (drawn, possibly shortened) and the bar. */
+  pan: { cavityStart: number; x: number; width: number; cavityMm: number; shortened: boolean } | null;
   /** Dashed add-a-lite slot drawn one nominal gap after the last pane. */
   ghost: { x: number; width: number } | null;
 }
@@ -61,16 +72,21 @@ function layout(
   viewWidth = VIEWBOX_WIDTH,
   padding = PADDING,
   withGhost = false,
+  panCavityMm?: number,
 ): Layout {
   const drawable = viewWidth - padding * 2;
+  const drawnCavityMm =
+    panCavityMm === undefined ? 0 : Math.min(MAX_DRAWN_CAVITY_MM, Math.max(0, panCavityMm));
   const totalMm =
     lites.reduce((sum, l) => sum + Math.max(0, l.thickness), 0) +
-    gaps.reduce((sum, g) => sum + Math.max(0, g.width), 0);
+    gaps.reduce((sum, g) => sum + Math.max(0, g.width), 0) +
+    drawnCavityMm;
 
   const scale = drawable / Math.max(REFERENCE_SPAN_MM, totalMm);
   const totalPx =
     lites.reduce((sum, l) => sum + Math.max(MIN_PANE_PX, l.thickness * scale), 0) +
-    gaps.reduce((sum, g) => sum + Math.max(0, g.width) * scale, 0);
+    gaps.reduce((sum, g) => sum + Math.max(0, g.width) * scale, 0) +
+    (panCavityMm === undefined ? 0 : drawnCavityMm * scale + PAN_PX);
 
   const panes: PaneLayout[] = [];
   const gapSpans: Layout["gapSpans"] = [];
@@ -89,6 +105,20 @@ function layout(
     }
   }
 
+  let pan: Layout["pan"] = null;
+  if (panCavityMm !== undefined) {
+    const cavityStart = cursor;
+    cursor += drawnCavityMm * scale;
+    pan = {
+      cavityStart,
+      x: cursor,
+      width: PAN_PX,
+      cavityMm: panCavityMm,
+      shortened: panCavityMm > MAX_DRAWN_CAVITY_MM,
+    };
+    cursor += PAN_PX;
+  }
+
   // The ghost is an affordance, not geometry: it hangs a fixed 14px off the
   // right of the centered build-up so the real lites never shift to make
   // room for it.
@@ -96,16 +126,17 @@ function layout(
     ? { x: cursor + 14, width: Math.max(MIN_PANE_PX, 6 * scale) }
     : null;
 
-  return { panes, gapSpans, ghost };
+  return { panes, gapSpans, pan, ghost };
 }
 
-export type DiagramFeature = "coating" | "frit";
+export type DiagramFeature = "coating" | "frit" | "spandrel";
 
 export function SurfaceDiagram({
   lites,
   gaps,
   coatingSurface,
   fritSurface,
+  spandrel,
   onFeatureClick,
   onAddAt,
   onAddLite,
@@ -114,6 +145,7 @@ export function SurfaceDiagram({
   gaps: GapInput[];
   coatingSurface?: SurfaceNumber;
   fritSurface?: SurfaceNumber;
+  spandrel?: SpandrelInput;
   /** Tapping a feature tag jumps to that feature's card. */
   onFeatureClick?: (feature: DiagramFeature) => void;
   /** When set, bare surfaces grow a + affordance that adds a feature there. */
@@ -121,12 +153,14 @@ export function SurfaceDiagram({
   /** When set, a dashed ghost pane after the last lite adds one on click. */
   onAddLite?: () => void;
 }) {
-  const { panes, gapSpans, ghost } = layout(
+  const floodCoatSurface = spandrel?.kind === "flood-coat" ? spandrel.surface : undefined;
+  const { panes, gapSpans, pan, ghost } = layout(
     lites,
     gaps,
     VIEWBOX_WIDTH,
     PADDING,
     Boolean(onAddLite),
+    spandrel?.kind === "back-pan" ? spandrel.cavity : undefined,
   );
 
   // A coating and a frit facing each other across one cavity (surfaces k and
@@ -204,6 +238,7 @@ export function SurfaceDiagram({
                   x={edgeX}
                   hasCoating={coatingSurface === surface}
                   hasFrit={fritSurface === surface}
+                  hasFloodCoat={floodCoatSurface === surface}
                   yNudge={nudgeFor(surface)}
                   onFeatureClick={onFeatureClick}
                   onAdd={onAddAt ? () => onAddAt(surface) : undefined}
@@ -234,6 +269,57 @@ export function SurfaceDiagram({
             </text>
           </g>
         ))}
+
+        {pan ? (
+          <g
+            role={onFeatureClick ? "button" : undefined}
+            tabIndex={onFeatureClick ? 0 : undefined}
+            aria-label={onFeatureClick ? "Edit the back pan" : undefined}
+            onClick={onFeatureClick ? () => onFeatureClick("spandrel") : undefined}
+            onKeyDown={(event) => {
+              if (onFeatureClick && (event.key === "Enter" || event.key === " ")) {
+                event.preventDefault();
+                onFeatureClick("spandrel");
+              }
+            }}
+            className={onFeatureClick ? "cursor-pointer outline-none transition-opacity hover:opacity-80 focus:outline-none" : undefined}
+          >
+            {/* Cavity dimension, marked as shortened when the drawing can't hold it. */}
+            <line
+              x1={pan.cavityStart + 2}
+              y1={GLASS_BOTTOM + 8}
+              x2={pan.x - 2}
+              y2={GLASS_BOTTOM + 8}
+              stroke="var(--border-strong)"
+              strokeWidth={0.75}
+              strokeDasharray={pan.shortened ? "2 2" : undefined}
+            />
+            <text
+              x={(pan.cavityStart + pan.x) / 2}
+              y={GLASS_BOTTOM + 20}
+              textAnchor="middle"
+              className="fill-[var(--muted)] text-[8px]"
+            >
+              {pan.shortened ? `${pan.cavityMm}mm ≈` : `${pan.cavityMm}mm`}
+            </text>
+            <rect
+              x={pan.x}
+              y={GLASS_TOP - 4}
+              width={pan.width}
+              height={GLASS_BOTTOM - GLASS_TOP + 8}
+              fill="var(--spandrel)"
+              rx={0.5}
+            />
+            <FeatureTag
+              x={pan.x + pan.width}
+              y={(GLASS_TOP + GLASS_BOTTOM) / 2}
+              text="back pan"
+              color="var(--spandrel)"
+              softColor="var(--spandrel-soft)"
+              side="right"
+            />
+          </g>
+        ) : null}
 
         {ghost && onAddLite ? (
           <g
@@ -311,14 +397,24 @@ export function MiniSection({
   gaps,
   coatingSurface,
   fritSurface,
+  spandrel,
 }: {
   lites: LiteInput[];
   gaps: GapInput[];
   coatingSurface?: SurfaceNumber;
   fritSurface?: SurfaceNumber;
+  spandrel?: SpandrelInput;
 }) {
   const width = 120;
-  const { panes } = layout(lites, gaps, width, 6);
+  const { panes, pan } = layout(
+    lites,
+    gaps,
+    width,
+    6,
+    false,
+    spandrel?.kind === "back-pan" ? spandrel.cavity : undefined,
+  );
+  const floodCoatSurface = spandrel?.kind === "flood-coat" ? spandrel.surface : undefined;
 
   const surfaceX = (surface: SurfaceNumber): number | null => {
     const pane = panes[Math.floor((surface - 1) / 2)];
@@ -328,6 +424,7 @@ export function MiniSection({
 
   const coatingX = coatingSurface ? surfaceX(coatingSurface) : null;
   const fritX = fritSurface ? surfaceX(fritSurface) : null;
+  const floodX = floodCoatSurface ? surfaceX(floodCoatSurface) : null;
 
   return (
     <svg viewBox={`0 0 ${width} 36`} className="h-9 w-auto shrink-0" aria-hidden>
@@ -356,6 +453,12 @@ export function MiniSection({
           strokeWidth={2.5}
           strokeDasharray="3 2.5"
         />
+      ) : null}
+      {floodX !== null ? (
+        <line x1={floodX} y1={3} x2={floodX} y2={33} stroke="var(--spandrel)" strokeWidth={2.5} />
+      ) : null}
+      {pan ? (
+        <rect x={pan.x} y={2} width={Math.max(2, pan.width)} height={32} fill="var(--spandrel)" />
       ) : null}
     </svg>
   );
@@ -452,6 +555,7 @@ function SurfaceMarker({
   x,
   hasCoating,
   hasFrit,
+  hasFloodCoat,
   yNudge,
   onFeatureClick,
   onAdd,
@@ -460,12 +564,13 @@ function SurfaceMarker({
   x: number;
   hasCoating: boolean;
   hasFrit: boolean;
+  hasFloodCoat: boolean;
   /** Vertical shift applied when this tag shares a cavity with a facing tag. */
   yNudge: number;
   onFeatureClick?: (feature: DiagramFeature) => void;
   onAdd?: () => void;
 }) {
-  const occupied = hasCoating || hasFrit;
+  const occupied = hasCoating || hasFrit || hasFloodCoat;
   const mid = (GLASS_TOP + GLASS_BOTTOM) / 2;
   // Odd surfaces are lite LEFT edges (glass to the right), even surfaces are
   // lite RIGHT edges (glass to the left): the tag points the other way.
@@ -506,6 +611,22 @@ function SurfaceMarker({
             softColor="var(--warning-soft)"
             side={tagSide}
             onClick={onFeatureClick ? () => onFeatureClick("frit") : undefined}
+          />
+        </>
+      ) : null}
+      {hasFloodCoat ? (
+        // Frit and a flood coat never share a surface (they exclude each
+        // other), so the coating is the only tag this can stack with.
+        <>
+          <line x1={x} y1={GLASS_TOP} x2={x} y2={GLASS_BOTTOM} stroke="var(--spandrel)" strokeWidth={3.5} />
+          <FeatureTag
+            x={x}
+            y={featureTagY(hasCoating ? 1 : 0, hasCoating) + yNudge}
+            text="flood coat"
+            color="var(--spandrel)"
+            softColor="var(--spandrel-soft)"
+            side={tagSide}
+            onClick={onFeatureClick ? () => onFeatureClick("spandrel") : undefined}
           />
         </>
       ) : null}

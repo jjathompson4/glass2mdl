@@ -6,7 +6,7 @@ import {
   type DerivedOptics,
   type SurfaceNumber,
 } from "@/engine";
-import { defaultFrit, useAppStore } from "@/lib/store";
+import { defaultFrit, defaultSpandrel, useAppStore } from "@/lib/store";
 import { fitVerdict, type FitVerdict } from "./fitVerdict";
 import { MiniSection, SurfaceDiagram, type DiagramFeature } from "./SurfaceDiagram";
 
@@ -27,6 +27,7 @@ export function DiagramPanel({ derived }: { derived: DerivedOptics | null }) {
   const system = useAppStore((s) => s.system);
   const moveCoatingToSurface = useAppStore((s) => s.moveCoatingToSurface);
   const setFrit = useAppStore((s) => s.setFrit);
+  const setSpandrel = useAppStore((s) => s.setSpandrel);
   const setLiteCount = useAppStore((s) => s.setLiteCount);
   const assemblyEdited = useAppStore((s) => s.assemblyEdited);
 
@@ -57,8 +58,11 @@ export function DiagramPanel({ derived }: { derived: DerivedOptics | null }) {
 
   const coating = system.lites.find((l) => l.coating)?.coating;
   const frit = system.frit;
+  const spandrel = system.spandrel;
   const canAddCoating = !coating;
-  const canAddFrit = !frit;
+  // Frit and a spandrel finish exclude each other.
+  const canAddFrit = !frit && !spandrel;
+  const canAddFloodCoat = !frit && !spandrel;
   const verdict = derived ? fitVerdict(derived, system.assembly) : null;
 
   const scrollToCard = (id: string) => {
@@ -66,7 +70,9 @@ export function DiagramPanel({ derived }: { derived: DerivedOptics | null }) {
   };
 
   const jumpToFeature = (feature: DiagramFeature) => {
-    scrollToCard(feature === "coating" ? "card-coating" : "card-frit");
+    scrollToCard(
+      feature === "coating" ? "card-coating" : feature === "frit" ? "card-frit" : "card-spandrel",
+    );
   };
 
   const addCoating = (surface: SurfaceNumber) => {
@@ -81,10 +87,26 @@ export function DiagramPanel({ derived }: { derived: DerivedOptics | null }) {
     scrollToCard("card-frit");
   };
 
+  const addFloodCoat = (surface: SurfaceNumber) => {
+    setSpandrel(defaultSpandrel("flood-coat", system.lites.length, surface));
+    setPendingAdd(null);
+    scrollToCard("card-spandrel");
+  };
+
+  // What the + on a given surface can add: a flood coat only goes on a back
+  // face (even number), the others anywhere.
+  const optionsAt = (surface: SurfaceNumber) => [
+    ...(canAddCoating ? [{ label: "Coating", add: addCoating, style: "border-accent text-accent hover:bg-accent hover:text-white" }] : []),
+    ...(canAddFrit ? [{ label: "Frit", add: addFrit, style: "border-warning text-warning hover:bg-warning-soft" }] : []),
+    ...(canAddFloodCoat && surface % 2 === 0
+      ? [{ label: "Flood coat (spandrel)", add: addFloodCoat, style: "border-spandrel text-spandrel hover:bg-spandrel-soft" }]
+      : []),
+  ];
+
   const handleAddAt = (surface: SurfaceNumber) => {
     // With only one kind of feature left to add there is nothing to ask.
-    if (canAddCoating && !canAddFrit) return addCoating(surface);
-    if (canAddFrit && !canAddCoating) return addFrit(surface);
+    const options = optionsAt(surface);
+    if (options.length === 1) return options[0].add(surface);
     setPendingAdd(surface);
   };
 
@@ -97,8 +119,9 @@ export function DiagramPanel({ derived }: { derived: DerivedOptics | null }) {
             gaps={system.gaps}
             coatingSurface={coating?.surface}
             fritSurface={frit?.surface}
+            spandrel={spandrel}
             onFeatureClick={jumpToFeature}
-            onAddAt={canAddCoating || canAddFrit ? handleAddAt : undefined}
+            onAddAt={canAddCoating || canAddFrit || canAddFloodCoat ? handleAddAt : undefined}
             onAddLite={
               system.lites.length < 3
                 ? () => setLiteCount(system.lites.length + 1)
@@ -111,24 +134,16 @@ export function DiagramPanel({ derived }: { derived: DerivedOptics | null }) {
                   <span className="font-medium text-foreground">
                     Add to surface #{pendingAdd}:
                   </span>
-                  {canAddCoating ? (
+                  {optionsAt(pendingAdd).map((option) => (
                     <button
+                      key={option.label}
                       type="button"
-                      onClick={() => addCoating(pendingAdd)}
-                      className="rounded-md border border-accent bg-surface px-2.5 py-1 font-medium text-accent transition hover:bg-accent hover:text-white"
+                      onClick={() => option.add(pendingAdd)}
+                      className={`rounded-md border bg-surface px-2.5 py-1 font-medium transition ${option.style}`}
                     >
-                      Coating
+                      {option.label}
                     </button>
-                  ) : null}
-                  {canAddFrit ? (
-                    <button
-                      type="button"
-                      onClick={() => addFrit(pendingAdd)}
-                      className="rounded-md border border-warning bg-surface px-2.5 py-1 font-medium text-warning transition hover:bg-warning-soft"
-                    >
-                      Frit
-                    </button>
-                  ) : null}
+                  ))}
                   <button
                     type="button"
                     onClick={() => setPendingAdd(null)}
@@ -257,6 +272,7 @@ function CondensedBar({
   const system = useAppStore((s) => s.system);
   const coating = system.lites.find((l) => l.coating)?.coating;
   const frit = system.frit;
+  const spandrel = system.spandrel;
 
   return (
     <div className="flex items-center gap-3.5">
@@ -265,6 +281,7 @@ function CondensedBar({
         gaps={system.gaps}
         coatingSurface={coating?.surface}
         fritSurface={frit?.surface}
+        spandrel={spandrel}
       />
 
       {/* On phones the name and number strip give way, and once a real fit
@@ -280,7 +297,7 @@ function CondensedBar({
             {constructionSummary(system)}
           </span>
         </div>
-        {coating || frit ? (
+        {coating || frit || spandrel ? (
           <div className="mt-0.5 flex gap-1.5">
             {coating ? (
               <button
@@ -298,6 +315,15 @@ function CondensedBar({
                 className="whitespace-nowrap rounded-full border border-warning bg-warning-soft px-2 py-px text-[10px] font-semibold text-warning transition hover:opacity-80"
               >
                 frit · #{frit.surface}
+              </button>
+            ) : null}
+            {spandrel ? (
+              <button
+                type="button"
+                onClick={() => onJump("spandrel")}
+                className="whitespace-nowrap rounded-full border border-spandrel bg-spandrel-soft px-2 py-px text-[10px] font-semibold text-spandrel transition hover:opacity-80"
+              >
+                {spandrel.kind === "flood-coat" ? `flood coat · #${spandrel.surface}` : "back pan"}
               </button>
             ) : null}
           </div>

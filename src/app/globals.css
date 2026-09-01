@@ -16,6 +16,9 @@
   --warning-soft: #fdf4e0;
   --success: #2e7d32;
   --success-soft: #f0f8f1;
+  /* Spandrel finish tag: a bronze, apart from the coating blue and frit amber. */
+  --spandrel: #7a4f2e;
+  --spandrel-soft: #f6ede5;
 }
 
 /*
@@ -40,6 +43,8 @@
     --warning-soft: #241d10;
     --success: #6fbf73;
     --success-soft: #14241a;
+    --spandrel: #d19a6e;
+    --spandrel-soft: #2b1f16;
   }
 }
 
@@ -59,6 +64,8 @@
   --warning-soft: #241d10;
   --success: #6fbf73;
   --success-soft: #14241a;
+  --spandrel: #d19a6e;
+  --spandrel-soft: #2b1f16;
 }
 
 /* Native controls (colour pickers, range thumbs) follow the chosen theme. */
@@ -85,6 +92,8 @@
   --color-warning-soft: var(--warning-soft);
   --color-success: var(--success);
   --color-success-soft: var(--success-soft);
+  --color-spandrel: var(--spandrel);
+  --color-spandrel-soft: var(--spandrel-soft);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
