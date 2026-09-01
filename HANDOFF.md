@@ -43,7 +43,12 @@ changes, all live on `main` (workstation validation of the split still owed):
   false pass of the whole panel as one thin lite). Verified on synthetic
   reproductions of all three field topologies; the combined-mesh open item
   in [`docs/max-apply-workflow.md`](docs/max-apply-workflow.md) is closed.
-  Workstation validation still owed.
+  **FIELD-VALIDATED end to end the same night** (Jeff, workstation): both
+  welded GL31X panels recognized ("3 lites in one object"), Tag split them
+  into 6 lites / 2 IGUs with the framing left untagged, manifest resolved,
+  Assign built the 3 per-position Multi-Subs, UV-mapped all 6 lites, and
+  wired the roller wave into all 9 sub-materials. Remaining confirmation:
+  the Iray render.
 - **Safety helpers**: `untag_selected()` (undo one bad tag without
   clear_tags() nuking the scene) and `debug_shells()` (read-only per-shell
   verdicts with the numbers), both as GUI buttons.

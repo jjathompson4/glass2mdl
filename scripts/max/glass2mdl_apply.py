@@ -971,7 +971,7 @@ def qa():
     tagged = _tagged_objects()
     for obj in tagged:
         obj.material = mm
-    print("g2m: QA material on %d objects. Red out, blue in, green edges."
+    print("g2m: QA material on %d objects. Green out, red in, blue edges."
           % len(tagged))
 
 
