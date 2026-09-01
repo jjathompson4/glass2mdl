@@ -405,6 +405,12 @@ Worth remembering that asserting an element *exists* is not verification.
    per-lite RGB the solvers already consume. IR and emitter untouched.
 4. **Laminated lites (PVB), acid-etch/satin, spandrel/back-painted** — each is a
    new `LayerIR` kind plus one emitter case. The IR is the extension seam.
+   **Spandrel is planned in detail** (2026-09-01, Jeff's scope: back-paint
+   AND shadow-box, monolithic and IGU): see
+   [`docs/spandrel-plan.md`](docs/spandrel-plan.md) — the `diffuse` LayerIR
+   kind and its emitter cases already exist; the plan covers input model,
+   solver, UI, manifest, tests, and the required Max-side two-product
+   assign fix.
 5. **Side-by-side compare** of two configurations under identical conditions.
 
 The rule that keeps these cheap: **solvers never emit strings, emitters never
