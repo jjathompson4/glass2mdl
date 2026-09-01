@@ -127,6 +127,22 @@ def _mm(value):
     return float(rt.units.decodeValue("%gmm" % value))
 
 
+def _script_revision():
+    """Short FNV-1a of this file's own bytes (the hash idiom of
+    contentRevision in mdl/naming.ts), shown in the window title and log.
+    Self-computed at runtime so it can never go stale — a stale script copy
+    was indistinguishable from a fresh one until something broke."""
+    try:
+        with open(__file__, "rb") as fh:
+            data = fh.read()
+        h = 2166136261
+        for b in data:
+            h = ((h ^ b) * 16777619) & 0xFFFFFFFF
+        return "%07x" % (h & 0xFFFFFFF)
+    except Exception:  # noqa: BLE001
+        return "unknown"
+
+
 # --- geometry access -------------------------------------------------------
 
 def _vert_transform(obj, sample):
@@ -1620,7 +1636,8 @@ def show_gui():
             pass
 
     dlg = QtWidgets.QDialog(parent)
-    dlg.setWindowTitle("glass2mdl - apply to modeled IGUs")
+    revision = _script_revision()
+    dlg.setWindowTitle("glass2mdl - apply to modeled IGUs  ·  rev %s" % revision)
     dlg.setMinimumWidth(480)
     root = QtWidgets.QVBoxLayout(dlg)
 
@@ -1851,11 +1868,14 @@ def show_gui():
     dlg.show()
     _GUI = dlg
     log.appendPlainText(
+        "Script revision %s.\n"
         "Workflow: select your glazing in the viewport > Check > Tag + color "
         "check > flip anything red-out > choose the manifest > Assign "
         "materials.\n"
-        "No Material ID setup is needed beforehand; tagging does it.")
-    print("g2m: window open. If you closed it, run this script again.")
+        "No Material ID setup is needed beforehand; tagging does it."
+        % revision)
+    print("g2m: window open (script rev %s). If you closed it, run this"
+          " script again." % revision)
 
 
 if __name__ == "__main__":
