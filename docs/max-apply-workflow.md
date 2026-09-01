@@ -194,8 +194,14 @@ Record results as a session in [mdl-compat.md](mdl-compat.md):
 - ~~Discovery result → automatic Bind factory (or confirmed fallback).~~
   **DONE 2026-08-25** — Iray+ MDL is scriptable; `make_iray_mdl_factory` is
   implemented and render-validated on the per-lite V5227 DGU.
-- Combined-mesh imports (Revit "combine by material" merges a type into one
-  mesh): same clustering per mesh *element* — v2.
+- ~~Combined-mesh imports (Revit "combine by material" merges a type into one
+  mesh): same clustering per mesh *element* — v2.~~ **DONE (first field
+  model, TGU facade):** `tag()` splits a combined object into per-lite
+  objects — disconnected shells that individually pass the lite test are
+  detached (undoable), framing/setting blocks stay behind untagged (hollow
+  frame caps rejected by a bounding-fill test, narrow shells by
+  `min_pane_mm`). Shells *welded* to framing (shared vertices) still cannot
+  be separated and are skipped with a shell-count message.
 - Productizing: shipping a per-export apply script inside the ZIP (a
   `kind: "maxscript"` file in `buildExport`) once this workflow is validated
   and the coated-solid emitter fixes the per-face material names.

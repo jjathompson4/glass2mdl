@@ -39,9 +39,12 @@ a single flat facade — that is what qa() + flip is for: orient the model,
 exterior must read green, flip what is wrong. Consistency matters more than the
 first guess being right.
 
-v1 scope: each lite is a separate solid object (Editable Poly or Editable
-Mesh; pass convert=True to collapse other geometry). Combined-mesh imports
-(Revit "combine by material") are v2.
+Scope: each lite is a separate solid object (Editable Poly or Editable
+Mesh; pass convert=True to collapse other geometry), or a combined object
+whose disconnected shells are lites — a Revit "Triple-Glazed Vision" panel
+that arrives as ONE mesh carrying three solid lites plus framing is split by
+tag() into per-lite objects, with the framing left behind untagged. Shells
+welded to the framing (shared vertices) cannot be separated and are skipped.
 """
 
 import fnmatch
@@ -188,11 +191,15 @@ def _face_geometry(loop):
     return _normalize(n), area, (cx, cy, cz)
 
 
-def _cluster_faces(loops, plane_tol):
+def _cluster_faces(loops, plane_tol, faces=None):
     """Group coplanar same-direction faces; imports triangulate, so one lite
-    face arrives as many triangles that must be summed before comparing."""
+    face arrives as many triangles that must be summed before comparing.
+    faces limits the clustering to those 1-based indices (one shell of a
+    combined object); None means every face."""
+    face_idxs = faces if faces is not None else range(1, len(loops) + 1)
     clusters = []
-    for idx, loop in enumerate(loops):
+    for idx0 in face_idxs:
+        loop = loops[idx0 - 1]
         n, area, c = _face_geometry(loop)
         if area <= 0.0:
             continue
@@ -200,14 +207,14 @@ def _cluster_faces(loops, plane_tol):
         placed = False
         for cl in clusters:
             if _dot(n, cl["n"]) > 0.999 and abs(_dot(cl["n"], c) - cl["d"]) < plane_tol:
-                cl["faces"].append(idx + 1)
+                cl["faces"].append(idx0)
                 cl["area"] += area
                 cl["center"] = _v_add(cl["center"], _v_scale(c, area))
                 cl["weight"] += area
                 placed = True
                 break
         if not placed:
-            clusters.append({"n": n, "d": d, "faces": [idx + 1], "area": area,
+            clusters.append({"n": n, "d": d, "faces": [idx0], "area": area,
                              "center": _v_scale(c, area), "weight": area})
     for cl in clusters:
         cl["center"] = _v_scale(cl["center"], 1.0 / cl["weight"])
@@ -245,15 +252,29 @@ def _snapshot_loops(obj, max_faces):
     return loops, None
 
 
-def _probe_lite(obj, plane_tol, max_thickness, max_faces):
-    """Class-agnostic lite test for detection (see _snapshot_loops)."""
+def _probe_lite(obj, plane_tol, max_thickness, max_faces, min_extent=0.0):
+    """Class-agnostic lite test for detection (see _snapshot_loops). A
+    combined multi-lite object qualifies through _analyze_stack; its record
+    is one representative lite carrying rec["lites"] > 1. A stack of 2+
+    outranks a single-lite pass: a combined panel's equal-area faces can tie
+    so that two opposite ones sort as 'largest' and the whole panel
+    false-passes as one thin lite (see _split_stack)."""
     loops, why = _snapshot_loops(obj, max_faces)
     if loops is None:
         return None, why
     rec, why = _analyze_loops(loops, plane_tol, max_thickness)
-    if rec is None:
+    stack = _analyze_stack(loops, plane_tol, max_thickness, min_extent)
+    if stack is not None and (rec is None or len(stack["lites"]) >= 2):
+        rec = stack["lites"][0]
+        rec["lites"] = len(stack["lites"])
+    elif rec is None:
+        shells = len(_elements(loops, plane_tol))
+        if shells > 1:
+            why += (" (%d separate shells; none passes the lite test"
+                    " alone)" % shells)
         return None, why
     rec["obj"] = obj
+    rec.setdefault("lites", 1)
     return rec, None
 
 
@@ -270,8 +291,8 @@ def _analyze_lite(obj, plane_tol, max_thickness):
     return rec, None
 
 
-def _analyze_loops(loops, plane_tol, max_thickness):
-    clusters = _cluster_faces(loops, plane_tol)
+def _analyze_loops(loops, plane_tol, max_thickness, faces=None):
+    clusters = _cluster_faces(loops, plane_tol, faces)
     if len(clusters) < 3:
         return None, "fewer than 3 planar face groups (not a solid lite)"
     clusters.sort(key=lambda c: c["area"], reverse=True)
@@ -296,9 +317,19 @@ def _analyze_loops(loops, plane_tol, max_thickness):
         for p in loops[fi - 1]:
             us.append(_dot(p, u))
             vs.append(_dot(p, v))
-    extent_min = _min(_max(us) - _min(us), _max(vs) - _min(vs))
+    extent_u = _max(us) - _min(us)
+    extent_v = _max(vs) - _min(vs)
+    extent_min = _min(extent_u, extent_v)
+    # How much of its bounding rectangle the big face covers. A lite is a
+    # mostly solid slab (~1.0; a rotated rectangle bounds at worst 0.5); a
+    # frame cap is a hollow ring that passes every slab test yet covers
+    # little of its bounds. Only the shell path rejects on this — for whole
+    # objects the user's selection is trusted, as ever.
+    bounds = extent_u * extent_v
+    fill = a["area"] / bounds if bounds > 0 else 0.0
     return {
         "extent_min": extent_min,
+        "fill": fill,
         "axis": a["n"],
         "center": ((a["center"][0] + b["center"][0]) / 2,
                    (a["center"][1] + b["center"][1]) / 2,
@@ -308,6 +339,75 @@ def _analyze_loops(loops, plane_tol, max_thickness):
         "side_b": {"n": b["n"], "faces": b["faces"]},
         "edges": edges,
     }, None
+
+
+def _elements(loops, tol):
+    """Partition faces into connected shells: faces sharing a (welded)
+    vertex position belong together. Position-based, not index-based,
+    because imports routinely duplicate vertices per face — duplicates land
+    on identical coordinates, so a quantized position key reunites them.
+    The cell size stays well under any real cavity or glass-to-frame
+    clearance so distinct solids never merge. Returns lists of 1-based face
+    indices."""
+    parent = list(range(len(loops)))
+
+    def find(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    q = tol * 0.01 if tol > 0 else 1e-6
+    seen = {}
+    for fi, loop in enumerate(loops):
+        for p in loop:
+            key = (int(round(p[0] / q)), int(round(p[1] / q)), int(round(p[2] / q)))
+            j = seen.get(key)
+            if j is None:
+                seen[key] = fi
+            else:
+                ra, rb = find(fi), find(j)
+                if ra != rb:
+                    parent[rb] = ra
+    shells = {}
+    for fi in range(len(loops)):
+        shells.setdefault(find(fi), []).append(fi + 1)
+    return list(shells.values())
+
+
+def _analyze_stack(loops, plane_tol, max_thickness, min_extent):
+    """A combined multi-lite object: disconnected shells that individually
+    pass the lite test, all facing the same way. Triple-glazed vision panels
+    routinely import from Revit as ONE mesh carrying three solid lites plus
+    framing — the whole-object test can never pass there (the two largest
+    face groups are same-direction faces of different lites), so this is the
+    fallback. Framing shells fail the lite test (frame caps additionally by
+    the fill test, setting blocks by min_extent) and stay unlisted.
+
+    Returns {"lites": [per-shell records, outermost-first ordering not
+    guaranteed], "shells": total shell count} or None when the object is not
+    a lite stack."""
+    shells = _elements(loops, plane_tol)
+    if len(shells) < 2:
+        return None
+    lites = []
+    for faces in shells:
+        rec, _why = _analyze_loops(loops, plane_tol, max_thickness, faces=faces)
+        if rec is None:
+            continue
+        if rec["fill"] < 0.35:  # hollow ring: a frame cap, not glass
+            continue
+        if min_extent > 0 and rec["extent_min"] < min_extent:
+            continue  # setting block / glass shim
+        rec["faces"] = faces
+        lites.append(rec)
+    if not lites:
+        return None
+    axis = lites[0]["axis"]
+    if any(abs(_dot(r["axis"], axis)) < 0.98 for r in lites[1:]):
+        return None  # shells face different ways; not a glazing stack
+    lites.sort(key=lambda r: _dot(r["center"], axis))
+    return {"lites": lites, "shells": len(shells)}
 
 
 def _set_face_ids(rec, assignments):
@@ -354,6 +454,8 @@ def _pick_exterior(groups):
     to a globally consistent side (for flat single facades) with a warning."""
     all_centers = [r["center"] for g in groups for r in g]
     n = len(all_centers)
+    if n == 0:
+        return groups
     centroid = (sum(c[0] for c in all_centers) / n,
                 sum(c[1] for c in all_centers) / n,
                 sum(c[2] for c in all_centers) / n)
@@ -454,7 +556,8 @@ def find_glazing(max_faces=2000, min_pane_mm=200.0, plane_tol_mm=1.0,
     candidates, reasons, hinted_rejects, scanned = [], {}, [], 0
     for obj in rt.geometry:
         scanned += 1
-        rec, why = _probe_lite(obj, plane_tol, max_thickness, max_faces)
+        rec, why = _probe_lite(obj, plane_tol, max_thickness, max_faces,
+                               min_extent=min_pane)
         if rec is not None and rec["extent_min"] < min_pane:
             rec, why = None, "narrower than %.0fmm in-plane (frame profile?)" % min_pane_mm
         if rec is None:
@@ -466,8 +569,10 @@ def find_glazing(max_faces=2000, min_pane_mm=200.0, plane_tol_mm=1.0,
         candidates.append(rec)
 
     groups = _group_igus(candidates, _mm(axial_gap_mm), lateral_factor)
-    multi = sum(1 for g in groups if len(g) > 1)
+    multi = sum(1 for g in groups
+                if len(g) > 1 or any(r.get("lites", 1) > 1 for r in g))
     in_multi = {id(r["obj"]) for g in groups if len(g) > 1 for r in g}
+    in_multi |= {id(r["obj"]) for r in candidates if r.get("lites", 1) > 1}
     # Low confidence = geometry is the only evidence: no name hint AND not
     # part of a multi-lite stack. Worth a second look before tagging.
     low = [r["obj"].name for r in candidates
@@ -516,14 +621,106 @@ def assign_type(prefix):
     print("g2m: type '%s' assigned to %d objects." % (prefix, len(sel)))
 
 
+def _detach_shell(obj, faces):
+    """Detach one shell of an Editable Poly to its own node, keeping the
+    layer and any type stamp so bind()'s resolution still works on the
+    piece. Returns the new node, or None."""
+    name = str(rt.uniqueName("%s_lite" % obj.name))
+    try:
+        rt.polyop.detachFaces(obj, faces, delete=True, asNode=True, name=name)
+    except Exception as exc:  # noqa: BLE001
+        print("g2m: detachFaces failed on %s: %s" % (obj.name, exc))
+        return None
+    node = rt.getNodeByName(name)
+    if node is None:
+        return None
+    try:
+        obj.layer.addNode(node)
+    except Exception:  # noqa: BLE001
+        pass
+    stamp = rt.getUserProp(obj, PROP_TYPE)
+    if stamp not in (None, "", "undefined"):
+        rt.setUserProp(node, PROP_TYPE, str(stamp))
+    return node
+
+
+def _split_stack(obj, plane_tol, max_thickness, min_extent, convert,
+                 min_lites=1):
+    """Split a combined multi-lite object into per-lite objects so the
+    per-object pipeline (IGU grouping, lite positions, per-lite materials)
+    applies. Lite shells are detached to new nodes named <name>_liteNNN;
+    non-lite geometry (framing) stays behind in the original, untagged.
+    When the object is nothing but lites, the first stays in place instead
+    so no empty node is left.
+
+    min_lites is the caller's evidence bar: 1 when the single-lite test
+    already failed (any split rescues the object), 2 when it passed — a
+    combined panel's equal-area faces can tie such that two OPPOSITE ones
+    sort as 'largest' and the whole panel false-passes as one lite, so a
+    real multi-lite stack outranks that read, but a lone lite shell plus
+    rejected junk does not.
+
+    Returns (nodes, why): every node that may now be a single lite (detached
+    pieces plus the original), or (None, reason) when the object is not a
+    splittable stack. Detaching renumbers the remaining faces, so each pass
+    re-analyzes and detaches ONE shell."""
+    kind, loops = _world_faces(obj)
+    if loops is None:
+        return None, None
+    stack = _analyze_stack(loops, plane_tol, max_thickness, min_extent)
+    if stack is None or len(stack["lites"]) < min_lites:
+        shells = len(_elements(loops, plane_tol))
+        if shells > 1:
+            return None, ("%d separate shells in one object; none passes the"
+                          " lite test alone" % shells)
+        return None, None
+    count = len(stack["lites"])
+    if rt.classOf(obj) != rt.Editable_Poly:
+        if not convert:
+            return None, ("%d stacked lites in one object; enable the"
+                          " Editable Poly collapse so tagging can split"
+                          " them" % count)
+        try:
+            rt.convertToPoly(obj)
+        except Exception:  # noqa: BLE001
+            return None, ("%d stacked lites in one object, but it could not"
+                          " be collapsed to Editable Poly to split" % count)
+    nodes = [obj]
+    for _ in range(64):
+        kind, loops = _world_faces(obj)
+        if loops is None:
+            break
+        stack = _analyze_stack(loops, plane_tol, max_thickness, min_extent)
+        if stack is None:
+            break  # one shell left, or only non-lite geometry (framing)
+        lites = stack["lites"]
+        pure = len(lites) == stack["shells"]
+        if pure and len(lites) < 2:
+            break  # one connected lite left: it stays in the original
+        rec = lites[-1] if pure else lites[0]
+        node = _detach_shell(obj, rec["faces"])
+        if node is None:
+            return None, "could not detach a lite from the combined object"
+        nodes.append(node)
+    return nodes, None
+
+
 def tag(pattern=None, convert=True, plane_tol_mm=1.0, max_thickness_mm=60.0,
-        axial_gap_mm=150.0, lateral_factor=0.35):
+        axial_gap_mm=150.0, lateral_factor=0.35, min_pane_mm=200.0):
     """Tag lites in the selection (or matching a name/layer pattern) with the
     ID 1/2/3 convention, and group them into IGUs stored as user properties.
 
     Face IDs live on Editable Poly/Mesh, so anything else in the selection is
     collapsed first (convert=True, the default; undoable). Pass convert=False
     to leave import classes and modifier stacks untouched and skip them.
+
+    A selected object that is not one lite but CONTAINS lites — a
+    triple-glazed panel imported as one mesh, framing included — is split
+    into per-lite objects first (undoable, like everything here); the
+    framing stays behind untagged. The user's selection is trusted at the
+    object level as ever, but the shells inside a combined object were never
+    hand-picked, so those are screened: min_pane_mm rejects glass-shim and
+    setting-block shells, and hollow shells (frame caps) are never lites.
     """
     if rt is None:
         print("Run inside 3ds Max.")
@@ -536,8 +733,9 @@ def tag(pattern=None, convert=True, plane_tol_mm=1.0, max_thickness_mm=60.0,
     plane_tol = _mm(plane_tol_mm)
     max_thickness = _mm(max_thickness_mm)
     axial_gap = _mm(axial_gap_mm)
+    min_pane = _mm(min_pane_mm)
 
-    records, skipped, converted = [], [], 0
+    records, skipped, converted, split = [], [], 0, 0
     with _UndoBlock():
         for obj in objs:
             if convert and rt.classOf(obj) not in (rt.Editable_Poly, rt.Editable_mesh):
@@ -547,10 +745,35 @@ def tag(pattern=None, convert=True, plane_tol_mm=1.0, max_thickness_mm=60.0,
                 except Exception:  # noqa: BLE001
                     pass
             rec, why = _analyze_lite(obj, plane_tol, max_thickness)
-            if rec is None:
-                skipped.append((obj.name, why))
-            else:
-                records.append(rec)
+            # A stack of 2+ lites outranks a single-lite pass — see
+            # _split_stack on the equal-area tie that can false-pass a
+            # whole combined panel as one thin lite.
+            pieces, split_why = _split_stack(
+                obj, plane_tol, max_thickness, min_pane, convert,
+                min_lites=1 if rec is None else 2)
+            if pieces is None:
+                if rec is not None:
+                    records.append(rec)
+                else:
+                    skipped.append((obj.name, split_why or why))
+                continue
+            split += 1
+            for piece in pieces:
+                prec, pwhy = _analyze_lite(piece, plane_tol, max_thickness)
+                if prec is not None:
+                    records.append(prec)
+                elif piece is obj:
+                    skipped.append((piece.name, "non-lite remainder of the"
+                                    " split (framing?), left untagged"))
+                else:
+                    skipped.append((piece.name, pwhy))
+
+        if not records:
+            print("g2m: nothing tagged — no selected object passed the lite"
+                  " test.")
+            for name, why in skipped:
+                print("  skipped %s: %s" % (name, why))
+            return
 
         groups = _pick_exterior(_group_igus(records, axial_gap, lateral_factor))
 
@@ -571,8 +794,10 @@ def tag(pattern=None, convert=True, plane_tol_mm=1.0, max_thickness_mm=60.0,
                 rt.setUserProp(obj, PROP_IGU, str(igu_idx))
                 rt.setUserProp(obj, PROP_POSITION, position)
 
-    print("g2m: tagged %d lites in %d IGUs; skipped %d%s."
+    print("g2m: tagged %d lites in %d IGUs; skipped %d%s%s."
           % (len(records), len(groups), len(skipped),
+             "; split %d combined objects into per-lite objects (undoable)"
+             % split if split else "",
              "; collapsed %d to Editable Poly (undoable)" % converted if converted else ""))
     for name, why in skipped:
         print("  skipped %s: %s" % (name, why))
@@ -1228,15 +1453,17 @@ def check_selection(max_faces=2000, min_pane_mm=200.0, plane_tol_mm=1.0,
         return []
     sel = list(rt.selection)
     if not sel:
-        print("g2m: nothing selected. Select your glazing solids first, each"
-              " lite as its own object.")
+        print("g2m: nothing selected. Select your glazing solids first —"
+              " lites as their own objects, or combined IGU objects (Tag"
+              " splits those per lite).")
         return []
     plane_tol = _mm(plane_tol_mm)
     max_thickness = _mm(max_thickness_mm)
     min_pane = _mm(min_pane_mm)
-    ok, bad = [], []
+    ok, bad, stacked = [], [], []
     for obj in sel:
-        rec, why = _probe_lite(obj, plane_tol, max_thickness, max_faces)
+        rec, why = _probe_lite(obj, plane_tol, max_thickness, max_faces,
+                               min_extent=min_pane)
         if rec is not None and rec["extent_min"] < min_pane:
             rec, why = None, ("narrower than %.0fmm in-plane (frame profile?)"
                               % min_pane_mm)
@@ -1244,7 +1471,13 @@ def check_selection(max_faces=2000, min_pane_mm=200.0, plane_tol_mm=1.0,
             bad.append((str(obj.name), why))
         else:
             ok.append(obj)
+            if rec.get("lites", 1) > 1:
+                stacked.append((str(obj.name), rec["lites"]))
     print("g2m: %d of %d selected objects look like lites." % (len(ok), len(sel)))
+    for name, count in stacked[:15]:
+        print("  %s: %d lites in one object; Tag will split it into separate"
+              " per-lite objects (undoable), leaving any framing behind."
+              % (name, count))
     for name, why in bad[:15]:
         print("  not a lite, %s: %s" % (name, why))
     if len(bad) > 15:
@@ -1366,8 +1599,9 @@ def show_gui():
     # 1 - Select
     lay1 = group("1 · Select the glazing",
                  "In the viewport, select the glazing solids you want to "
-                 "convert (each lite as its own object), then check them "
-                 "here. Nothing is modified by the check.")
+                 "convert — lites as their own objects, or whole IGU "
+                 "objects (Tag splits those per lite, framing left alone) — "
+                 "then check them here. Nothing is modified by the check.")
     row1 = QtWidgets.QHBoxLayout()
     btn_check = QtWidgets.QPushButton("Check my selection")
     btn_scan = QtWidgets.QPushButton("Find candidates for me")
