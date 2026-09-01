@@ -212,3 +212,17 @@ Record results as a session in [mdl-compat.md](mdl-compat.md):
 - Module caching: when iterating on materials, remember Max serves a stale
   module until the filename changes or Max restarts
   ([iray-findings.md](iray-findings.md) §7.2).
+- **Spandrels (2026-09-01, built, not yet field-tested)** — see
+  [spandrel-plan.md](spandrel-plan.md). Two products in one scene: `bind()`
+  leaves lites typed for another product alone (it used to blank them with
+  an empty Multi-Sub), and Assign scopes to the viewport selection when
+  there is one. A flood-coated lite binds like any lite (the manifest's
+  `slot_params` turn the paint on for ID 2). A shadow-box **back pan** is
+  its own manifest type `<prefix>_pan`: tag the pans with *Tag selection as
+  back pan* (no face IDs, no IGU grouping — `tag_as_pan()`), load the
+  spandrel manifest, pick the `_pan` type, Mark selection as this type,
+  Assign. Pans get no roller wave and no UV map. **Open**: a pan modeled as
+  a thin solid sheet passes sheet pairing as a lite and would turn a DGU
+  spandrel into outer/center/inner — `ga.MIN_LITE_THICKNESS_MM = 2.5` in the
+  listener rejects sheets under 2.5mm from both lite tests; whether it needs
+  to be the default waits on `debug_shells()` on a real spandrel panel.

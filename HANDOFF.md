@@ -68,6 +68,29 @@ changes, all live on `main` (workstation validation of the split still owed):
   spandrel ZIPs coexisting with vision ZIPs; see
   [`docs/spandrel-plan.md`](docs/spandrel-plan.md).
 
+**Spandrel built on branch `spandrel` (2026-09-01, NOT merged, NOT
+rendered).** Jeff's scope from the interview: no spandrel data sheets exist —
+a spandrel is the vision build-up (fitted as before, VLT stays the glass's)
+plus a finish the manufacturer offers: an opaque **flood coat** on the back
+of a lite (#4 typically, the architects' usual) or a **back pan** (painted
+or metallic) behind an air cavity; both pipelines; own product, own ZIP;
+colour by RAL number (small classic table), chart eyedrop, or sample; frit
+and spandrel exclusive. The finish colour is the one input that sets level
+as well as hue; the tool reports what the panel *reads as* from outside
+through the fitted glass (`spandrelAppearance`, `docs/physics.md` →
+Spandrel), which is what the Iray render is judged against. Engine: a
+volumetric flood coat is a **bsdf conditional on `interior_face`** on the
+painted lite (new emitter structure — **kit test 12 gates it**); a pan is
+`<prefix>_pan`, a second manifest type with `by_position._default` and
+`roller_wave: false` (metallic pans via `simple_glossy_bsdf` — **kit test
+13**). UI: third feature card "Spandrel finish", diagram tag / pan bar,
+reads-as swatches. Max script: `tag_as_pan()` + GUI button, pans skip the
+ripple and the UV map, `MIN_LITE_THICKNESS_MM` knob (off) for pans read as
+lites. Merge to `main` (= production) only after kit 12/13 render on the
+workstation and the two-ZIP field check on the GL31X model; the open loops
+(Debug shells on a spandrel panel, cavity depth, planar pan surfaces, the
+owed TGU render) are listed at the end of `docs/spandrel-plan.md`.
+
 ---
 
 ## The former blocker — resolved 2026-08-23/24
@@ -416,12 +439,10 @@ Worth remembering that asserting an element *exists* is not verification.
    per-lite RGB the solvers already consume. IR and emitter untouched.
 4. **Laminated lites (PVB), acid-etch/satin, spandrel/back-painted** — each is a
    new `LayerIR` kind plus one emitter case. The IR is the extension seam.
-   **Spandrel is planned in detail** (2026-09-01, Jeff's scope: back-paint
-   AND shadow-box, monolithic and IGU): see
-   [`docs/spandrel-plan.md`](docs/spandrel-plan.md) — the `diffuse` LayerIR
-   kind and its emitter cases already exist; the plan covers input model,
-   solver, UI, manifest, tests, and the required Max-side two-product
-   assign fix.
+   **Spandrel is built on branch `spandrel`** (2026-09-01; flood coat and
+   back pan, both pipelines, UI and Max script included; render-gated by
+   kit tests 12 and 13 before merging): see
+   [`docs/spandrel-plan.md`](docs/spandrel-plan.md).
 5. **Side-by-side compare** of two configurations under identical conditions.
 
 The rule that keeps these cheap: **solvers never emit strings, emitters never

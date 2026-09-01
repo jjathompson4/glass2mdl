@@ -86,6 +86,20 @@ PROP_IGU = "g2m_igu"
 PROP_POSITION = "g2m_position"
 PROP_TYPE = "g2m_type"
 
+# A spandrel back pan is tagged without face IDs (one material on every
+# face) and outside the IGU grouping; bind() resolves it through the
+# manifest's `_default` position, so the name here only has to be one no
+# lite ever gets.
+POSITION_PAN = "pan"
+
+# Thinnest sheet the lite tests accept, in mm. 0 = no floor (the default so
+# far). A sheet-metal back pan modeled as a thin solid (1-2mm) passes the
+# sheet-pairing test as a lite and turns a double-glazed spandrel into
+# outer/center/inner; glass is never under 3mm, so 2.5 separates them. Set
+# from the listener (ga.MIN_LITE_THICKNESS_MM = 2.5) once the field model
+# says its pans are read that way — see docs/spandrel-plan.md.
+MIN_LITE_THICKNESS_MM = 0.0
+
 # Matches litePositionNames() in src/engine/mdl/naming.ts — material names in
 # the export are `${prefix}_${position}`, so these must not drift.
 def lite_position_names(count):
@@ -345,6 +359,9 @@ def _analyze_loops(loops, plane_tol, max_thickness, faces=None):
     thickness = abs(_dot(a["n"], _v_sub(a["center"], b["center"])))
     if thickness > max_thickness:
         return None, "thickness %.1f exceeds the lite limit" % thickness
+    if MIN_LITE_THICKNESS_MM > 0 and thickness < _mm(MIN_LITE_THICKNESS_MM):
+        return None, ("thickness %.1fmm is under the %.1fmm lite minimum"
+                      " (sheet metal?)" % (thickness / _mm(1.0), MIN_LITE_THICKNESS_MM))
     big = set(a["faces"]) | set(b["faces"])
     edges = [f for cl in clusters[2:] for f in cl["faces"] if f not in big]
     # In-plane extents of the big face: a lite is large in BOTH directions,
@@ -443,7 +460,8 @@ def _pair_sheets(loops, plane_tol, max_thickness, min_extent, faces=None):
         gap = b["offset"] - a["offset"]
         opposite = _dot(a["n"], b["n"]) < -0.98
         similar = _min(a["area"], b["area"]) >= 0.5 * _max(a["area"], b["area"])
-        if opposite and similar and 0.0 < gap <= max_thickness:
+        thick_enough = gap >= _mm(MIN_LITE_THICKNESS_MM) if MIN_LITE_THICKNESS_MM > 0 else True
+        if opposite and similar and thick_enough and 0.0 < gap <= max_thickness:
             pairs.append((a, b))
             i += 2
         else:
@@ -975,7 +993,7 @@ def qa():
     for mat_id, (label, rgb) in QA_COLORS.items():
         mm.materialList[mat_id - 1] = _diag_material("g2m_QA_%s" % label, rgb)
         mm.names[mat_id - 1] = label
-    tagged = _tagged_objects()
+    tagged = [o for o in _tagged_objects() if not _is_pan(o)]
     for obj in tagged:
         obj.material = mm
     print("g2m: QA material on %d objects. Green out, red in, blue edges."
@@ -1012,11 +1030,15 @@ def _flip_igu(members):
         rt.setUserProp(obj, PROP_POSITION, new_pos)
 
 
+def _is_pan(obj):
+    return str(rt.getUserProp(obj, PROP_POSITION)) == POSITION_PAN
+
+
 def _igus_of(objects):
     igus = {}
     for obj in objects:
         igu = rt.getUserProp(obj, PROP_IGU)
-        if igu is not None:
+        if igu is not None and str(igu) != POSITION_PAN:
             igus.setdefault(str(igu), None)
     members = {k: [] for k in igus}
     for obj in _tagged_objects():
@@ -1327,6 +1349,12 @@ def make_iray_mdl_factory(manifest):
     # bind() leaves lites typed for any OTHER product alone instead of
     # handing them an empty Multi-Sub.
     factory.known_prefixes = set(manifest)
+    # A spandrel back pan is sheet metal: the manifest marks its type
+    # roller_wave: false and bind() leaves the ripple off it.
+    factory.no_roller = {
+        prefix for prefix, entry in manifest.items()
+        if isinstance(entry, dict) and entry.get("roller_wave") is False
+    }
     return factory
 
 
@@ -1468,6 +1496,7 @@ def bind(type_map=None, material_factory=None, add_uv=True, objects=None):
     roller_bmp, _roller_mult = _roller_wave_bitmap() if material_factory else (None, 1.0)
     roller_wired = 0
     known = getattr(material_factory, "known_prefixes", None)
+    no_roller = getattr(material_factory, "no_roller", set()) or set()
     for obj in (_tagged_objects() if objects is None else objects):
         stamped = rt.getUserProp(obj, PROP_TYPE)
         prefix = str(stamped) if stamped not in (None, "", "undefined") else None
@@ -1508,11 +1537,12 @@ def bind(type_map=None, material_factory=None, add_uv=True, objects=None):
             for i, (slot, mat) in enumerate(zip(slots, mats)):
                 mm.names[i] = "%s face (ID%d)" % (slot, i + 1)
                 mm.materialList[i] = mat
-                if mat is not None and roller_bmp is not None:
+                if mat is not None and roller_bmp is not None and prefix not in no_roller:
                     if _wire_roller_wave(mat, roller_bmp):
                         roller_wired += 1
             multis[key] = mm
-        if add_uv and _ensure_uv(obj):
+        # A pan has no ripple and no pattern to map; the box UV stays off it.
+        if add_uv and position != POSITION_PAN and _ensure_uv(obj):
             uv_mapped += 1
         obj.material = multis[key]
         bound += 1
@@ -1565,9 +1595,12 @@ def report():
     print("g2m: %d tagged lites in %d IGUs." % (len(tagged), len(igus)))
     for t, n in sorted(types.items()):
         print("  type %s: %d lites" % (t, n))
-    for key in sorted(igus, key=lambda k: int(k) if k.isdigit() else 0):
+    for key in sorted(igus, key=lambda k: int(k) if k.isdigit() else -1):
         listing = ", ".join("%s(%s)" % pair for pair in igus[key])
-        print("  IGU %s: %s" % (key, listing))
+        if key == POSITION_PAN:
+            print("  back pans: %s" % listing)
+        else:
+            print("  IGU %s: %s" % (key, listing))
 
 
 def untag_selected():
@@ -1589,6 +1622,40 @@ def untag_selected():
             rt.setUserProp(obj, PROP_POSITION, "")
             n += 1
     print("g2m: untagged %d of %d selected objects." % (n, len(list(rt.selection))))
+
+
+def tag_as_pan():
+    """Tag the current selection as spandrel back pans: no face IDs, no IGU
+    grouping — one material covers every face of a pan, and its lite
+    position is whatever the manifest's `_default` entry binds. Use it for
+    pans the lite test rejects (folded sheet metal, insulated boxes) or that
+    Tag would otherwise read as a third lite. Then, with the spandrel
+    manifest loaded: pick its `_pan` type, Mark selection as this type,
+    Assign materials."""
+    if rt is None:
+        print("Run inside 3ds Max.")
+        return
+    sel = list(rt.selection)
+    if not sel:
+        print("g2m: nothing selected. Select the back pans first.")
+        return
+    n = skipped = 0
+    for obj in sel:
+        tagged = rt.getUserProp(obj, PROP_TAGGED)
+        if (tagged == 1 or str(tagged) == "1") and not _is_pan(obj):
+            skipped += 1
+            continue  # a tagged lite; Untag selected first if it is really a pan
+        rt.setUserProp(obj, PROP_TAGGED, "1")
+        rt.setUserProp(obj, PROP_IGU, POSITION_PAN)
+        rt.setUserProp(obj, PROP_POSITION, POSITION_PAN)
+        n += 1
+    print("g2m: tagged %d objects as back pans (no face IDs; one material"
+          " per pan)." % n)
+    if skipped:
+        print("g2m: left %d alone: already tagged as lites. Untag selected"
+              " first if they are really pans." % skipped)
+    print("  Next: load the spandrel manifest, choose its '_pan' type, Mark"
+          " selection as this type, Assign materials.")
 
 
 def clear_tags():
@@ -1888,11 +1955,19 @@ def show_gui():
     btn_tag = QtWidgets.QPushButton("Tag + color check")
     btn_flip = QtWidgets.QPushButton("Flip selected")
     btn_flip_all = QtWidgets.QPushButton("Flip all")
+    btn_pan = QtWidgets.QPushButton("Tag selection as back pan")
+    btn_pan.setToolTip(
+        "Spandrel shadow boxes: the metal pan behind the glass gets one "
+        "material on every face and no face IDs. Select the pans (not the "
+        "glass) and press this; assign them later from the spandrel "
+        "manifest's '_pan' type.")
     row2.addWidget(btn_tag)
     row2.addWidget(btn_flip)
     row2.addWidget(btn_flip_all)
+    row2.addWidget(btn_pan)
     row2.addStretch(1)
     lay2.addLayout(row2)
+    btn_pan.clicked.connect(lambda: run(tag_as_pan, redraw=False))
 
     def do_tag():
         tag(convert=chk_convert.isChecked())
@@ -1916,8 +1991,10 @@ def show_gui():
     row3a.addWidget(lbl_manifest, 1)
     lay3.addLayout(row3a)
     lbl_multi = QtWidgets.QLabel(
-        "This manifest carries several glazing types: select each type's "
-        "lites in the viewport and mark them, then Assign materials.")
+        "This manifest carries several types: select each type's objects in "
+        "the viewport and mark them, then Assign materials. A '_pan' type is "
+        "a spandrel back pan: select the pans you tagged as back pans and "
+        "mark them with it.")
     lbl_multi.setWordWrap(True)
     lbl_multi.setStyleSheet("color: gray;")
     lbl_multi.hide()
@@ -1966,6 +2043,11 @@ def show_gui():
             if not multi:
                 print("  One type only: Assign materials applies it to the selection,"
                       " or to everything tagged when nothing is selected.")
+            pans = [k for k in keys if k.endswith("_pan")]
+            if pans:
+                print("  Spandrel back pan type %s: select the pans (tagged as back"
+                      " pans), Mark selection as this type, then Assign."
+                      % ", ".join(pans))
             print("  Export folder: %s" % export_dir)
             print("  Its parent must be an Iray+ MDL search path: %s"
                   % os.path.dirname(export_dir))

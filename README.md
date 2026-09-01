@@ -12,8 +12,13 @@ ZIP holding the `.mdl` module, any frit textures, and a README saying which
 material goes on which pane.
 
 Handles single, double, and triple IGUs; low-e, reflective, and other coatings;
-clear, low-iron, green, gray, bronze, and blue substrates; and frit as dots,
-lines, an uploaded coverage map, or plain coverage.
+clear, low-iron, green, gray, bronze, and blue substrates; frit as dots,
+lines, an uploaded coverage map, or plain coverage; and spandrels — the same
+glass with an opaque flood coat on the back of a lite, or a painted or
+metallic back pan behind an air cavity. A spandrel has no data sheet of its
+own: the glass is fitted as vision glass, the finish colour is taken as given
+(by RAL number, chart, or sample), and the tool reports what the panel reads
+as from outside through that glass.
 
 Colour can be given as CIELAB under D65 (what technical documents publish), CIE
 x,y chromaticity, or a swatch eyedropped from a product sheet. Measured colour
