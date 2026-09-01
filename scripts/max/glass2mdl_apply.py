@@ -41,10 +41,13 @@ first guess being right.
 
 Scope: each lite is a separate solid object (Editable Poly or Editable
 Mesh; pass convert=True to collapse other geometry), or a combined object
-whose disconnected shells are lites — a Revit "Triple-Glazed Vision" panel
-that arrives as ONE mesh carrying three solid lites plus framing is split by
-tag() into per-lite objects, with the framing left behind untagged. Shells
-welded to the framing (shared vertices) cannot be separated and are skipped.
+carrying several lites — a Revit "Triple-Glazed Vision" panel that arrives
+as ONE mesh with three solid lites plus framing is split by tag() into
+per-lite objects, framing left behind untagged. Two topologies are handled:
+lites as disconnected shells inside the mesh, and lites WELDED to the
+framing (Revit shares vertices at the glazing pocket, fusing everything into
+one shell) — those are recovered by pairing large parallel sheet clusters
+along the stack axis. debug_shells() explains either analysis per object.
 """
 
 import fnmatch
@@ -237,6 +240,28 @@ def _cluster_faces(loops, plane_tol, faces=None):
     return clusters
 
 
+def _cluster_extents(loops, cl):
+    """In-plane extents and fill of one cluster. A lite face is a mostly
+    solid sheet (fill ~1.0; a rotated rectangle bounds at worst 0.5); a
+    frame cap is a hollow ring that covers little of its bounds."""
+    n = cl["n"]
+    u = _normalize(_v_cross(n, (0.0, 0.0, 1.0) if abs(n[2]) < 0.9
+                            else (1.0, 0.0, 0.0)))
+    v = _v_cross(n, u)
+    us, vs = [], []
+    for fi in cl["faces"]:
+        for p in loops[fi - 1]:
+            us.append(_dot(p, u))
+            vs.append(_dot(p, v))
+    extent_u = _max(us) - _min(us)
+    extent_v = _max(vs) - _min(vs)
+    bounds = extent_u * extent_v
+    return {"u": u, "v": v,
+            "extent_u": extent_u, "extent_v": extent_v,
+            "extent_min": _min(extent_u, extent_v),
+            "fill": cl["area"] / bounds if bounds > 0 else 0.0}
+
+
 def _snapshot_loops(obj, max_faces):
     """World-space triangle loops for ANY renderable node, via snapshotAsMesh.
 
@@ -325,29 +350,14 @@ def _analyze_loops(loops, plane_tol, max_thickness, faces=None):
     # In-plane extents of the big face: a lite is large in BOTH directions,
     # while a mullion/frame profile passes every test above yet is narrow in
     # one — find_glazing() rejects on this, tag() trusts the user's selection.
-    u = _normalize(_v_cross(a["n"], (0.0, 0.0, 1.0) if abs(a["n"][2]) < 0.9
-                            else (1.0, 0.0, 0.0)))
-    v = _v_cross(a["n"], u)
-    us, vs = [], []
-    for fi in a["faces"]:
-        for p in loops[fi - 1]:
-            us.append(_dot(p, u))
-            vs.append(_dot(p, v))
-    extent_u = _max(us) - _min(us)
-    extent_v = _max(vs) - _min(vs)
-    extent_min = _min(extent_u, extent_v)
-    # How much of its bounding rectangle the big face covers. A lite is a
-    # mostly solid slab (~1.0; a rotated rectangle bounds at worst 0.5); a
-    # frame cap is a hollow ring that passes every slab test yet covers
-    # little of its bounds. Only the shell path rejects on this — for whole
-    # objects the user's selection is trusted, as ever.
-    bounds = extent_u * extent_v
-    fill = a["area"] / bounds if bounds > 0 else 0.0
+    # Fill catches frame caps, but only the multi-lite paths reject on it —
+    # for whole objects the user's selection is trusted, as ever.
+    ext = _cluster_extents(loops, a)
     return {
-        "extent_min": extent_min,
-        "extent_u": extent_u,
-        "extent_v": extent_v,
-        "fill": fill,
+        "extent_min": ext["extent_min"],
+        "extent_u": ext["extent_u"],
+        "extent_v": ext["extent_v"],
+        "fill": ext["fill"],
         "axis": a["n"],
         "center": ((a["center"][0] + b["center"][0]) / 2,
                    (a["center"][1] + b["center"][1]) / 2,
@@ -393,39 +403,133 @@ def _elements(loops, tol):
     return list(shells.values())
 
 
-def _analyze_stack(loops, plane_tol, max_thickness, min_extent):
-    """A combined multi-lite object: disconnected shells that individually
-    pass the lite test, all facing the same way. Triple-glazed vision panels
-    routinely import from Revit as ONE mesh carrying three solid lites plus
-    framing — the whole-object test can never pass there (the two largest
-    face groups are same-direction faces of different lites), so this is the
-    fallback. Framing shells fail the lite test (frame caps additionally by
-    the fill test, setting blocks by min_extent) and stay unlisted.
-
-    Returns {"lites": [per-shell records, outermost-first ordering not
-    guaranteed], "shells": total shell count} or None when the object is not
-    a lite stack."""
-    shells = _elements(loops, plane_tol)
-    if len(shells) < 2:
+def _pair_sheets(loops, plane_tol, max_thickness, min_extent, faces=None):
+    """Find the lites among one face set as paired parallel SHEETS: the
+    front/back of a lite are two large planar clusters facing away from
+    each other, one lite thickness apart; each pair then claims its edge
+    band by axial and lateral position. This works whether the set is one
+    clean solid, several lites, or glass WELDED to framing — Revit shares
+    vertices at the glazing pocket, fusing a whole panel into one shell
+    (field-hit on a GL31X triple-glazed facade: 100 faces, 1 shell), where
+    connectivity says nothing but the sheets are still there. Framing goes
+    unclaimed: caps fail the fill screen, bars sit laterally outside the
+    glass footprint, shims and blocks under min_extent."""
+    clusters = _cluster_faces(loops, plane_tol, faces)
+    if not clusters:
         return None
+    ref = _max(clusters, key=lambda c: c["area"])
+    axis = ref["n"]
+    sheets = []
+    for cl in clusters:
+        if abs(_dot(cl["n"], axis)) < 0.98:
+            continue
+        if cl["area"] < 0.2 * ref["area"]:
+            continue
+        ext = _cluster_extents(loops, cl)
+        if ext["fill"] < 0.35:
+            continue  # hollow ring: frame cap
+        if min_extent > 0 and ext["extent_min"] < min_extent:
+            continue
+        cl = dict(cl)
+        cl.update(ext)
+        cl["offset"] = _dot(axis, cl["center"])
+        sheets.append(cl)
+    if len(sheets) < 2:
+        return None
+    sheets.sort(key=lambda s: s["offset"])
+    pairs, i = [], 0
+    while i < len(sheets) - 1:
+        a, b = sheets[i], sheets[i + 1]
+        gap = b["offset"] - a["offset"]
+        opposite = _dot(a["n"], b["n"]) < -0.98
+        similar = _min(a["area"], b["area"]) >= 0.5 * _max(a["area"], b["area"])
+        if opposite and similar and 0.0 < gap <= max_thickness:
+            pairs.append((a, b))
+            i += 2
+        else:
+            i += 1
+    if not pairs:
+        return None
+    claimed = set()
+    for a, b in pairs:
+        claimed |= set(a["faces"]) | set(b["faces"])
+    # Glass edge faces sit ON the pair's footprint boundary; frame bars sit
+    # at least half a profile width outside it. 5mm of pad separates them.
+    pad = 5.0 * plane_tol
     lites = []
+    for a, b in pairs:
+        u, v = a["u"], a["v"]
+        us, vs = [], []
+        for fi in list(a["faces"]) + list(b["faces"]):
+            for p in loops[fi - 1]:
+                us.append(_dot(p, u))
+                vs.append(_dot(p, v))
+        u0, u1 = _min(us) - pad, _max(us) + pad
+        v0, v1 = _min(vs) - pad, _max(vs) + pad
+        lo = a["offset"] - 2.0 * plane_tol
+        hi = b["offset"] + 2.0 * plane_tol
+        edges = []
+        for fi in (faces if faces is not None else range(1, len(loops) + 1)):
+            if fi in claimed:
+                continue
+            loop = loops[fi - 1]
+            _n, area, c = _face_geometry(loop)
+            if area <= 0.0:
+                continue
+            # ENTIRELY within the lite's slab: a glass edge face always is,
+            # while a frame face that runs past this lite (a bar spanning
+            # the whole stack, a pocket return) never is — centroid tests
+            # would claim those.
+            ds = [_dot(axis, p) for p in loop]
+            if _min(ds) < lo or _max(ds) > hi:
+                continue
+            if u0 <= _dot(c, u) <= u1 and v0 <= _dot(c, v) <= v1:
+                edges.append(fi)
+        claimed |= set(edges)
+        thickness = abs(_dot(axis, _v_sub(a["center"], b["center"])))
+        center = _v_scale(_v_add(a["center"], b["center"]), 0.5)
+        lites.append({
+            "axis": a["n"], "center": center,
+            "face_area": a["area"], "thickness": thickness,
+            "extent_min": a["extent_min"], "extent_u": a["extent_u"],
+            "extent_v": a["extent_v"], "fill": a["fill"],
+            "side_a": {"n": a["n"], "faces": list(a["faces"])},
+            "side_b": {"n": b["n"], "faces": list(b["faces"])},
+            "edges": edges,
+            "faces": sorted(set(a["faces"]) | set(b["faces"]) | set(edges)),
+        })
+    lites.sort(key=lambda r: _dot(r["center"], axis))
+    return lites
+
+
+def _analyze_stack(loops, plane_tol, max_thickness, min_extent):
+    """The lites of a combined multi-lite object, found by sheet pairing
+    within each connected shell (see _pair_sheets — one mechanism covers
+    lites as separate solids in the mesh AND lites welded to framing).
+    The whole-object single-lite test can never read these objects: the two
+    largest face groups are usually same-direction faces of different
+    lites, and equal-area faces can even tie into a false single-lite pass.
+
+    Returns {"lites": [records, sorted along the stack axis], "shells":
+    shell count, "fused": True when some shell carried 2+ lites (welded)}
+    or None when the object holds no lite stack at all."""
+    shells = _elements(loops, plane_tol)
+    lites, fused = [], False
     for faces in shells:
-        rec, _why = _analyze_loops(loops, plane_tol, max_thickness, faces=faces)
-        if rec is None:
+        found = _pair_sheets(loops, plane_tol, max_thickness, min_extent,
+                             faces=faces)
+        if not found:
             continue
-        if rec["fill"] < 0.35:  # hollow ring: a frame cap, not glass
-            continue
-        if min_extent > 0 and rec["extent_min"] < min_extent:
-            continue  # setting block / glass shim
-        rec["faces"] = faces
-        lites.append(rec)
+        lites.extend(found)
+        if len(found) >= 2:
+            fused = True  # several lites in ONE shell: welded to framing
     if not lites:
         return None
     axis = lites[0]["axis"]
     if any(abs(_dot(r["axis"], axis)) < 0.98 for r in lites[1:]):
-        return None  # shells face different ways; not a glazing stack
+        return None  # parts face different ways; not a glazing stack
     lites.sort(key=lambda r: _dot(r["center"], axis))
-    return {"lites": lites, "shells": len(shells)}
+    return {"lites": lites, "shells": len(shells), "fused": fused}
 
 
 def _set_face_ids(rec, assignments):
@@ -712,9 +816,12 @@ def _split_stack(obj, plane_tol, max_thickness, min_extent, convert,
         if stack is None:
             break  # one shell left, or only non-lite geometry (framing)
         lites = stack["lites"]
-        pure = len(lites) == stack["shells"]
+        # The object is "nothing but lites" when the pairs claim every face
+        # (zero-area degenerates would tip this to junk-mode and leave a
+        # husk of them behind — rare, and harmless to the tagged lites).
+        pure = sum(len(r["faces"]) for r in lites) == len(loops)
         if pure and len(lites) < 2:
-            break  # one connected lite left: it stays in the original
+            break  # one lite left with nothing else: it stays in the original
         rec = lites[-1] if pure else lites[0]
         node = _detach_shell(obj, rec["faces"])
         if node is None:
@@ -1570,6 +1677,33 @@ def debug_shells(max_faces=20000, plane_tol_mm=1.0, max_thickness_mm=60.0,
                            % (rec["thickness"] / mm, rec["extent_u"] / mm,
                               rec["extent_v"] / mm, rec["fill"] * 100))
             print("  shell %d (%d faces): %s" % (i, len(faces), verdict))
+            if rec is not None:
+                continue
+            # The numbers behind a rejection: the shell's planar face
+            # groups, largest first, offsets along the biggest one's normal.
+            clusters = _cluster_faces(loops, plane_tol, faces=faces)
+            clusters.sort(key=lambda c: c["area"], reverse=True)
+            ref_n = clusters[0]["n"] if clusters else (0.0, 0.0, 1.0)
+            base = _dot(ref_n, clusters[0]["center"]) if clusters else 0.0
+            for cl in clusters[:10]:
+                ext = _cluster_extents(loops, cl)
+                d = _dot(cl["n"], ref_n)
+                print("    plane %+8.1fmm along stack, facing %s, %3d faces,"
+                      " %.0fmm x %.0fmm, covers %3.0f%% of bounds"
+                      % ((_dot(ref_n, cl["center"]) - base) / mm,
+                         "same" if d > 0.98 else
+                         ("oppo" if d < -0.98 else "side"),
+                         len(cl["faces"]), ext["extent_u"] / mm,
+                         ext["extent_v"] / mm, ext["fill"] * 100))
+            if len(clusters) > 10:
+                print("    ... and %d more planes" % (len(clusters) - 10))
+        stack = _analyze_stack(loops, plane_tol, max_thickness,
+                               _mm(min_pane_mm))
+        if stack is not None:
+            print("  => stack: %d lites%s; Tag will split them out."
+                  % (len(stack["lites"]),
+                     " via sheet pairing (glass welded to framing)"
+                     if stack.get("fused") else " as separate shells"))
 
 
 def probe_manifest(manifest):

@@ -29,14 +29,21 @@ changes, all live on `main` (workstation validation of the split still owed):
 - **Combined multi-lite objects split at tag()** — those panels import as ONE
   mesh carrying three solid lites plus metal framing, which the single-lite
   test can never read ("two largest face groups are not opposite", plus a
-  ZeroDivisionError when everything was skipped — both field-hit). tag() now
-  partitions failing objects into disconnected shells, detaches lite-passing
-  shells into per-lite objects (undoable), and leaves framing behind: hollow
-  frame caps rejected by a bounding-fill test, setting blocks by min_pane_mm.
-  A stack of 2+ lites outranks a single-lite pass (equal-area faces can tie
-  into a false pass of the whole panel as one thin lite). Verified on
-  synthetic reproductions of both failure modes; the combined-mesh open item
+  ZeroDivisionError when everything was skipped — both field-hit). And the
+  field went further: Revit WELDS the glass to the framing (shared vertices
+  at the glazing pocket), so the whole panel is one connected shell — 100
+  faces, 1 shell on the real model — and connectivity alone can never
+  separate it. tag() now finds lites by SHEET PAIRING within each shell
+  (front/back of a lite = two large parallel clusters facing apart, one
+  lite thickness between; the pair claims its edge band by axial + lateral
+  position), detaches each lite to its own object (undoable), and leaves
+  framing behind: caps fail a bounding-fill screen, bars sit laterally
+  outside the glass footprint, blocks/shims under min_pane_mm. A stack of
+  2+ lites outranks a single-lite pass (equal-area faces can tie into a
+  false pass of the whole panel as one thin lite). Verified on synthetic
+  reproductions of all three field topologies; the combined-mesh open item
   in [`docs/max-apply-workflow.md`](docs/max-apply-workflow.md) is closed.
+  Workstation validation still owed.
 - **Safety helpers**: `untag_selected()` (undo one bad tag without
   clear_tags() nuking the scene) and `debug_shells()` (read-only per-shell
   verdicts with the numbers), both as GUI buttons.

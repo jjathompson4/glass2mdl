@@ -200,8 +200,12 @@ Record results as a session in [mdl-compat.md](mdl-compat.md):
   objects — disconnected shells that individually pass the lite test are
   detached (undoable), framing/setting blocks stay behind untagged (hollow
   frame caps rejected by a bounding-fill test, narrow shells by
-  `min_pane_mm`). Shells *welded* to framing (shared vertices) still cannot
-  be separated and are skipped with a shell-count message.
+  `min_pane_mm`). Lites *welded* to framing (Revit shares vertices at the
+  glazing pocket, fusing the whole panel into one shell — field-hit on the
+  GL31X model, 100 faces in 1 shell) are recovered by pairing large parallel
+  sheet clusters along the stack axis and claiming each pair's edge band by
+  axial + lateral position; `debug_shells()` prints either analysis with
+  the numbers.
 - Productizing: shipping a per-export apply script inside the ZIP (a
   `kind: "maxscript"` file in `buildExport`) once this workflow is validated
   and the coated-solid emitter fixes the per-face material names.
