@@ -188,6 +188,58 @@ export const rollerWaveIgu: GlazingSystemInput = {
   rollerWave: { depth: "typical" },
 };
 
+/** Flood-coated monolithic spandrel: opaque paint on the back of one lite. */
+export const floodCoatMonolithic: GlazingSystemInput = {
+  name: "Flood coat monolithic",
+  lites: [{ thickness: mm(6), substrate: "clear" }],
+  gaps: [],
+  assembly: { tvis: fraction(0.88), rvisExt: fraction(0.08), rvisInt: fraction(0.08) },
+  spandrel: {
+    kind: "flood-coat",
+    surface: 2,
+    color: { kind: "srgb", hex: "#4A4D4F" },
+    colorLabel: "RAL 7024",
+  },
+};
+
+/** The vision product with a flood coat on #4: the common curtain-wall spandrel. */
+export const floodCoatIgu: GlazingSystemInput = {
+  ...solarban60,
+  name: "Flood coat IGU",
+  spandrel: {
+    kind: "flood-coat",
+    surface: 4,
+    color: { kind: "lab", L: 32, a: 1.5, b: -4 },
+    colorLabel: "manufacturer chart, warm gray",
+  },
+  rollerWave: { depth: "typical" },
+};
+
+/** Shadow box: the vision glass with a painted metal pan behind an air cavity. */
+export const backPanMatte: GlazingSystemInput = {
+  ...solarban60,
+  name: "Back pan matte",
+  spandrel: {
+    kind: "back-pan",
+    cavity: mm(100),
+    color: { kind: "srgb", hex: "#5B4636" },
+    colorLabel: "Kynar dark bronze",
+    finish: "matte",
+  },
+};
+
+export const backPanMetallic: GlazingSystemInput = {
+  ...monolithicClear,
+  name: "Back pan metallic",
+  spandrel: {
+    kind: "back-pan",
+    cavity: mm(50),
+    color: { kind: "srgb", hex: "#9EA2A6" },
+    colorLabel: "clear anodized",
+    finish: "metallic",
+  },
+};
+
 export const FIXTURES: Fixture[] = [
   { slug: "monolithic-clear-planar", input: monolithicClear, mode: "planar" },
   { slug: "monolithic-clear-volumetric", input: monolithicClear, mode: "volumetric" },
@@ -207,4 +259,11 @@ export const FIXTURES: Fixture[] = [
   { slug: "roller-wave-planar", input: rollerWaveIgu, mode: "planar" },
   { slug: "roller-wave-volumetric", input: rollerWaveIgu, mode: "volumetric" },
   { slug: "swatch-specified-volumetric", input: swatchSpecified, mode: "volumetric" },
+  { slug: "flood-coat-monolithic-planar", input: floodCoatMonolithic, mode: "planar" },
+  { slug: "flood-coat-monolithic-volumetric", input: floodCoatMonolithic, mode: "volumetric" },
+  { slug: "flood-coat-igu-planar", input: floodCoatIgu, mode: "planar" },
+  { slug: "flood-coat-igu-volumetric", input: floodCoatIgu, mode: "volumetric" },
+  { slug: "back-pan-matte-planar", input: backPanMatte, mode: "planar" },
+  { slug: "back-pan-matte-volumetric", input: backPanMatte, mode: "volumetric" },
+  { slug: "back-pan-metallic-volumetric", input: backPanMetallic, mode: "volumetric" },
 ];

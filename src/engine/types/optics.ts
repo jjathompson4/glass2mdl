@@ -87,4 +87,13 @@ export interface DerivedOptics {
     /** Largest absolute residual across the three, for quick UI thresholding. */
     max: number;
   };
+  /** Present for spandrels: the finish colour seen through the fitted glass. */
+  spandrel?: {
+    /** Exterior reflectance of the whole opaque panel, per channel. */
+    readsAs: RGB;
+    /** The glass stack's own reflection, before the finish adds to it. */
+    glassOnly: RGB;
+    /** The finish's albedo as entered (level and hue both taken as given). */
+    finish: RGB;
+  };
 }

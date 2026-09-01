@@ -1,0 +1,51 @@
+mdl 1.6;
+
+import ::anno::*;
+import ::df::*;
+import ::math::*;
+import ::state::*;
+
+// Does state::object_id() give materials per-object identity?
+//
+// Setup: Apply this one material to four or more separate boxes and render.
+//
+// Expected: Each box shows a DIFFERENT red coverage level. Identical levels
+// on every box mean object_id is constant in this build, and per-object
+// variation must keep coming from the apply script's UV offsets (the
+// current approach) rather than from inside the material.
+
+export float test09_object_value(uniform float scale = 1.0)
+{
+    return math::frac(float(state::object_id()) * 0.6180339887);
+}
+
+// Probe: red coverage is math::frac(object_id * phi).
+
+export material test09_object_variation(
+    uniform float frit_pattern_scale = 1.0
+        [[
+            anno::display_name("Frit pattern scale"),
+            anno::description("Unused by this probe; leave at 1.0.")
+        ]]
+)
+[[
+    anno::display_name("09 object id probe"),
+    anno::description("09 object id probe"),
+    anno::author("glass2mdl 0.1.0")
+]]
+= material(
+    thin_walled: true,
+    surface: material_surface(
+        scattering: df::weighted_layer(
+            weight: test09_object_value(frit_pattern_scale),
+            layer: df::diffuse_reflection_bsdf(
+                tint: color(0.9, 0.1, 0.1)
+            ),
+            base: df::specular_bsdf(
+                tint: color(1.0, 1.0, 1.0),
+                mode: df::scatter_transmit
+            )
+        )
+    ),
+    ior: color(1.52)
+);

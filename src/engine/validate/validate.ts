@@ -150,6 +150,59 @@ export function validateSystem(input: GlazingSystemInput): ValidationIssue[] {
     }
   }
 
+  const spandrel = input.spandrel;
+  if (spandrel) {
+    if (frit) {
+      issues.push({
+        severity: "error",
+        code: "spandrel-with-frit",
+        message:
+          "A spandrel cannot also carry a frit pattern: the flood coat or pan already covers the whole panel. Remove one of the two.",
+        field: "spandrel",
+      });
+    }
+    if (spandrel.kind === "flood-coat") {
+      if (spandrel.surface > highest) {
+        issues.push({
+          severity: "error",
+          code: "spandrel-surface-range",
+          message: `Surface #${spandrel.surface} does not exist on a ${lites.length}-lite construction (surfaces #1–#${highest}).`,
+          field: "spandrel.surface",
+        });
+      } else if (spandrel.surface % 2 !== 0) {
+        issues.push({
+          severity: "error",
+          code: "spandrel-surface-front",
+          message: `A flood coat goes on the back of a lite, an even-numbered surface (#${spandrel.surface + 1} for this lite). Surface #${spandrel.surface} faces outward.`,
+          field: "spandrel.surface",
+        });
+      } else if (lites.some((l) => l.coating?.surface === spandrel.surface)) {
+        issues.push({
+          severity: "warning",
+          code: "spandrel-covers-coating",
+          message: `The coating on surface #${spandrel.surface} sits under the flood coat, where it is hidden. Coated spandrel glass usually carries the coating on #2, with the paint on the last surface.`,
+          field: "spandrel.surface",
+        });
+      }
+    } else {
+      if (!(spandrel.cavity > 0)) {
+        issues.push({
+          severity: "error",
+          code: "spandrel-cavity-required",
+          message: "The back pan needs a cavity depth: how far it sits behind the glass.",
+          field: "spandrel.cavity",
+        });
+      } else if (spandrel.cavity < 10 || spandrel.cavity > 400) {
+        issues.push({
+          severity: "warning",
+          code: "spandrel-cavity-unusual",
+          message: `A ${spandrel.cavity}mm cavity is outside the usual 10–400mm range for a shadow box. Check the units.`,
+          field: "spandrel.cavity",
+        });
+      }
+    }
+  }
+
   const fields: Array<["tvis" | "rvisExt" | "rvisInt", string, string]> = [
     ["tvis", "Visible light transmittance", "assembly.tvis"],
     ["rvisExt", "Exterior visible reflectance", "assembly.rvisExt"],
@@ -234,18 +287,27 @@ export function validateForMode(
   if (mode !== "volumetric") return issues;
 
   const coatedIndex = input.lites.findIndex((l) => l.coating);
-  if (coatedIndex < 0) return issues;
-
-  return [
-    ...issues,
-    {
+  if (coatedIndex >= 0) {
+    issues.push({
       severity: "warning",
       code: "volumetric-coating-setup",
       message:
         "The coated lite exports as a per-face Material-ID assembly: in 3ds Max, assign its material to face ID 1 (exterior), ID 2 (interior; turn interior_face on in that slot), and ID 3 (edges) via a Multi-Sub-Object. The README and bundled bind manifest cover the setup; the glass2mdl Max apply script automates it.",
       field: `lites.${coatedIndex}.coating`,
-    },
-  ];
+    });
+  }
+
+  if (input.spandrel?.kind === "flood-coat") {
+    issues.push({
+      severity: "warning",
+      code: "volumetric-spandrel-setup",
+      message:
+        "The flood-coated lite renders the paint on face ID 2 only (interior_face on in that slot); IDs 1 and 3 stay glass. The bundled bind manifest sets this up through the apply script.",
+      field: "spandrel.surface",
+    });
+  }
+
+  return issues;
 }
 
 export const hasErrors = (issues: ValidationIssue[]): boolean =>

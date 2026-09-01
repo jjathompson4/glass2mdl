@@ -284,6 +284,62 @@ const ENTRIES: KitEntry[] = [
       }),
     ],
   },
+  {
+    slug: "12_flood_coat_faceid",
+    title: "Does a bsdf conditional on interior_face put paint on one face of a solid?",
+    question:
+      "The Material-ID box (ID 1 exterior, ID 2 the opposite face, ID 3 edges). Assign this ONE material to all three slots of a Multi-Sub-Object, with interior_face OFF in slots 1 and 3 and ON in slot 2. View the box from the ID 1 side, then from the ID 2 side.",
+    expected:
+      "From the ID 1 side: clear glass with a faint Fresnel reflection over a RED interior — the paint seen through 6mm of glass, slightly darkened. From the ID 2 side: flat matte RED, no glassiness, nothing transmitted. If the ID 1 side shows red paint AT the surface (no glass depth, no reflection), the conditional collapsed to the diffuse branch and flood coats need a second material per face instead. If the ID 2 side shows glass, the conditional was ignored.",
+    materials: [
+      material({
+        name: "test12_flood_coat",
+        displayName: "12 flood coat via interior_face",
+        layers: [
+          { kind: "diffuse", color: RED, interiorFaceOnly: true },
+          glassBase("reflect_transmit"),
+        ],
+        volume: { absorptionCoefficient: CLEAR_ABSORPTION },
+        params: [
+          {
+            name: "interior_face",
+            type: "bool",
+            defaultValue: false,
+            displayName: "Interior face",
+            description: "Off for Material IDs 1 and 3, on for ID 2.",
+          },
+        ],
+        comments: [
+          "Flood coat structure: `interior_face ? diffuse(RED) : glass`.",
+          "One material, three slots; only slot 2 turns the parameter on.",
+        ],
+      }),
+    ],
+  },
+  {
+    slug: "13_metal_pan",
+    title: "Does a glossy metal read correctly behind a glass solid?",
+    question:
+      "Place a 1m x 1m plane 100mm behind the test 07 reference box (the box between camera and plane), assign 13a to the plane and 13b to the box. Render at normal incidence and at about 45 degrees.",
+    expected:
+      "A brushed-metal BLUE panel seen through glass: a soft highlight that moves with the view, sharper than the matte 12 paint and never a mirror. At 45 degrees the glass reflection strengthens over it. If the plane renders black or invisible, simple_glossy_bsdf is not being honoured through the glass and the metallic finish needs a different BSDF.",
+    materials: [
+      material({
+        name: "test13_metal_pan",
+        displayName: "13a metallic back pan",
+        thinWalled: true,
+        layers: [{ kind: "metal", color: BLUE, roughness: 0.3 }],
+        comments: ["Apply to the plane behind the glass box."],
+      }),
+      material({
+        name: "test13_host_glass",
+        displayName: "13b host glass solid",
+        layers: [glassBase("reflect_transmit")],
+        volume: { absorptionCoefficient: CLEAR_ABSORPTION },
+        comments: ["Apply to the 6mm box in front of the pan."],
+      }),
+    ],
+  },
 ];
 
 function buildProtocol(): string {
@@ -371,6 +427,13 @@ function buildProtocol(): string {
     "    plus two planes; exact, at the cost of geometry the user must build.",
     "  Else                                         -> single coating plane and",
     "    a documented 1-2 point reflectance error on low-e products.",
+    "",
+    "SPANDREL (tests 12 and 13)",
+    "--------------------------",
+    "Test 12 gates the volumetric flood-coat export: the painted lite is ONE",
+    "material whose interior face swaps to opaque paint through a bsdf",
+    "conditional on the interior_face parameter. Test 13 gates the metallic",
+    "back-pan finish. Record both before any spandrel ZIP goes to a project.",
     "",
     "ROLLER WAVE (not an MDL test anymore)",
     "-------------------------------------",

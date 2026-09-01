@@ -1,12 +1,39 @@
-import { maxChannel, scaleRGB, luminance } from "../physics/color";
+import { linearRGBToHex, maxChannel, scaleRGB, luminance } from "../physics/color";
+import { describeColorSpec } from "../physics/colorimetry";
 import { absorptionCoefficient } from "../physics/slab";
 import { TOOL_NAME, TOOL_VERSION } from "../mdl/target";
 import { SUBSTRATE_LABELS } from "../physics/constants";
 import type { LayerIR } from "../types/ir";
 import type { DerivedOptics, RGB } from "../types/optics";
 import type { AssemblyFit } from "../physics/assembly";
-import { fitResidual } from "../physics/assembly";
-import type { ExportMode, GlazingSystemInput } from "../types/system";
+import { fitResidual, spandrelAppearance } from "../physics/assembly";
+import type { ExportMode, GlazingSystemInput, SpandrelInput } from "../types/system";
+
+/** Glossy-metal roughness for a "metallic" pan finish: brushed, not a mirror. */
+export const METALLIC_PAN_ROUGHNESS = 0.3;
+
+/** The BSDF a spandrel finish lowers to. */
+export function finishLayer(spandrel: SpandrelInput, finish: RGB): LayerIR {
+  if (spandrel.kind === "back-pan" && spandrel.finish === "metallic") {
+    return { kind: "metal", color: finish, roughness: METALLIC_PAN_ROUGHNESS };
+  }
+  return { kind: "diffuse", color: finish };
+}
+
+/** "RAL 7024 (#4A4D4F)" or "swatch #4A4D4F": how the finish colour was given. */
+export function describeFinishColor(spandrel: SpandrelInput, finish: RGB): string {
+  const hex = linearRGBToHex(finish).toUpperCase();
+  if (spandrel.colorLabel) return `${spandrel.colorLabel} (${hex})`;
+  return describeColorSpec(spandrel.color) ?? `swatch ${hex}`;
+}
+
+/** One line naming the finish, for headers and the README. */
+export function describeFinish(spandrel: SpandrelInput, finish: RGB): string {
+  const color = describeFinishColor(spandrel, finish);
+  return spandrel.kind === "flood-coat"
+    ? `flood coat on surface #${spandrel.surface}, ${color}`
+    : `${spandrel.finish} back pan ${spandrel.cavity}mm behind the glass, ${color}`;
+}
 
 /**
  * MDL's custom_curve_layer takes a scalar reflectivity, so a colored
@@ -99,6 +126,11 @@ export function provenanceComments(
     );
   }
 
+  const spandrel = spandrelAppearance(fit, input);
+  if (input.spandrel && spandrel) {
+    lines.push(`  Spandrel: ${describeFinish(input.spandrel, spandrel.finish)}`);
+  }
+
   lines.push(
     "",
     "Fitted result:",
@@ -106,6 +138,12 @@ export function provenanceComments(
     `  Reflectance ext: ${pct(luminance(fit.achieved.rFront))} (residual ${(residual.rvisExt * 100).toFixed(2)} pts)`,
     `  Reflectance int: ${pct(luminance(fit.achieved.rBack))} (residual ${(residual.rvisInt * 100).toFixed(2)} pts)`,
   );
+
+  if (spandrel) {
+    lines.push(
+      `  Spandrel reads as, from outside: ${pct(luminance(spandrel.readsAs))} (${linearRGBToHex(spandrel.readsAs).toUpperCase()}); the finish colour is taken as given, nothing transmits`,
+    );
+  }
 
   if (extraNotes.length) lines.push("", "Notes:", ...extraNotes.map((n) => `  - ${n}`));
   return lines;
@@ -140,5 +178,6 @@ export function buildDerived(input: GlazingSystemInput, fit: AssemblyFit): Deriv
       : undefined,
     recomputed: { t: fit.achieved.t, rFront: fit.achieved.rFront, rBack: fit.achieved.rBack },
     residual: fitResidual(fit, input),
+    spandrel: spandrelAppearance(fit, input),
   };
 }

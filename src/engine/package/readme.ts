@@ -1,5 +1,6 @@
 import { locateSurface } from "../physics/assembly";
-import { luminance } from "../physics/color";
+import { linearRGBToHex, luminance } from "../physics/color";
+import { describeFinish } from "../solve/common";
 import { litePositionNames } from "../mdl/naming";
 import { MDL_VERSION, TOOL_NAME, TOOL_VERSION } from "../mdl/target";
 import type { MaterialIR } from "../types/ir";
@@ -81,15 +82,34 @@ export function buildReadme(options: {
     "---------",
   );
 
+  const spandrel = input.spandrel;
+  const paintedLite =
+    spandrel?.kind === "flood-coat"
+      ? Math.min(locateSurface(spandrel.surface).lite, input.lites.length - 1)
+      : -1;
+  const pan = materials.find((m) => m.name.endsWith("_pan"));
+
   if (mode === "planar") {
     lines.push(
-      "This export models the whole assembly as one flat surface.",
+      spandrel?.kind === "flood-coat"
+        ? "This export models the whole spandrel as one flat opaque surface."
+        : "This export models the whole assembly as one flat surface.",
       "",
       `  ${materials[0].name}`,
       `      Apply to a single plane with no thickness, one face per opening.`,
       "      Face normals must point outward (toward the exterior); the",
       "      interior appearance comes from the material's backface.",
       "",
+    );
+    if (pan && spandrel?.kind === "back-pan") {
+      lines.push(
+        `  ${pan.name}`,
+        `      Back pan. Apply to a second plane ${spandrel.cavity}mm behind the`,
+        "      glass plane, matching its outline, normals facing outward.",
+        "",
+      );
+    }
+    lines.push(
       "Do not apply this material to a solid or an extruded lite: the",
       "measured numbers already account for every internal reflection, and",
       "a solid would apply them twice.",
@@ -117,6 +137,15 @@ export function buildReadme(options: {
           "      the body transmittance above.",
         );
       }
+      if (i === paintedLite && spandrel?.kind === "flood-coat") {
+        lines.push(
+          `      Flood coat on surface #${spandrel.surface}: Material ID 2 (the interior`,
+          "      face, interior_face on) renders the opaque paint; IDs 1 and 3",
+          "      stay glass. The apply script sets the parameter per ID.",
+        );
+      } else if (paintedLite >= 0 && i > paintedLite) {
+        lines.push("      Behind the flood coat; never visible from outside.");
+      }
       const gap = input.gaps[i];
       if (gap) lines.push(`      → then a ${gap.width}mm gap`);
       lines.push("");
@@ -133,6 +162,19 @@ export function buildReadme(options: {
         "      Create a flat plane matching the glass outline, offset it about",
         "      0.1mm off that face so the two surfaces are not coincident, and",
         "      assign this material to it.",
+        "",
+      );
+    }
+
+    if (pan && spandrel?.kind === "back-pan") {
+      lines.push(
+        `  ${pan.name}`,
+        `      Back pan, ${spandrel.cavity}mm behind the innermost lite. The same`,
+        "      material on every face; Material IDs do not matter for it.",
+        "      In the apply script: choose this type in the type list, select",
+        "      the pans in the viewport, Mark selection as this type, then",
+        "      Assign materials. Pans that fail the lite test still bind this",
+        "      way.",
         "",
       );
     }
@@ -219,6 +261,20 @@ export function buildReadme(options: {
       luminance(derived.recomputed.rBack),
     ).padStart(7)}`,
   );
+
+  if (spandrel && derived.spandrel) {
+    lines.push(
+      `  Spandrel, from outside   ${"".padStart(7)}   ${pct(luminance(derived.spandrel.readsAs)).padStart(7)}`,
+      "",
+      "SPANDREL",
+      "--------",
+      ...wrap(
+        `This build-up is a spandrel: ${describeFinish(spandrel, derived.spandrel.finish)}. The glass is fitted from the data sheet exactly as vision glass; the finish colour is taken as given, because nothing on a data sheet measures it. Seen from outside the panel reads as ${linearRGBToHex(derived.spandrel.readsAs).toUpperCase()} (${pct(luminance(derived.spandrel.readsAs))}) - the finish through this glass, which is the colour to judge in a render, not the finish on its own.`,
+        72,
+        "",
+      ),
+    );
+  }
 
   if (derived.residual.max > 0.02) {
     lines.push(

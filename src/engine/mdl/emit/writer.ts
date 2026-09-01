@@ -53,6 +53,20 @@ export function renderExpr(expr: MdlExpr, depth = 0): string {
   return `${expr.call}(\n${body}\n${INDENT.repeat(depth)})`;
 }
 
+/**
+ * One-line rendering, for an expression embedded in a conditional: MDL's
+ * `?:` reads badly split across the multi-line layout above, and a bsdf
+ * conditional is short enough to stay on one line.
+ */
+export function renderInline(expr: MdlExpr): string {
+  if (typeof expr === "string") return expr;
+  if (expr.args.length === 0) return `${expr.call}()`;
+  const body = expr.args
+    .map(([name, value]) => (name ? `${name}: ${renderInline(value)}` : renderInline(value)))
+    .join(", ");
+  return `${expr.call}(${body})`;
+}
+
 /** Records which standard modules were actually used, so imports can't drift. */
 export class ImportTracker {
   private readonly used = new Set<AllowedModule>();

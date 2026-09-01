@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { backPanMatte, backPanMetallic, floodCoatIgu, floodCoatMonolithic } from "./fixtures";
 import { solvePlanar } from "@/engine/solve/planar";
 import { solveVolumetric } from "@/engine/solve/volumetric";
 import { fitAssembly, liteAggregateOptics } from "@/engine/physics/assembly";
@@ -23,7 +24,7 @@ interface Evaluated {
   transmit: RGB;
 }
 
-function evaluateAtNormalIncidence(layers: LayerIR[]): Evaluated {
+function evaluateAtNormalIncidence(layers: LayerIR[], interiorFace = false): Evaluated {
   const innermost = layers[layers.length - 1];
   let result: Evaluated =
     innermost.kind === "specular-base"
@@ -34,10 +35,20 @@ function evaluateAtNormalIncidence(layers: LayerIR[]): Evaluated {
             reflect: scaleRGB(innermost.tint, AIR_GLASS_R0),
             transmit: scaleRGB(innermost.tint, 1 - AIR_GLASS_R0),
           }
-      : { reflect: { r: 0, g: 0, b: 0 }, transmit: { r: 0, g: 0, b: 0 } };
+      : innermost.kind === "diffuse" || innermost.kind === "metal"
+        ? { reflect: innermost.color, transmit: { r: 0, g: 0, b: 0 } }
+        : { reflect: { r: 0, g: 0, b: 0 }, transmit: { r: 0, g: 0, b: 0 } };
 
   for (let i = layers.length - 2; i >= 0; i--) {
     const layer = layers[i];
+    if (layer.kind === "diffuse" || layer.kind === "metal") {
+      // A face-selected diffuse replaces the stack on the interior face and is
+      // absent elsewhere (the emitter's bsdf conditional); a plain one is an
+      // opaque weight-1 layer over whatever is beneath.
+      if (layer.kind === "diffuse" && layer.interiorFaceOnly && !interiorFace) continue;
+      result = { reflect: layer.color, transmit: { r: 0, g: 0, b: 0 } };
+      continue;
+    }
     if (layer.kind !== "fresnel-coating") continue;
     const w = layer.normalReflectivity; // curve value at normal incidence
     result = {
@@ -230,5 +241,76 @@ describe("volumetric materials", () => {
     expect(comments).toContain("surface #2");
     expect(comments).toContain("Material ID");
     expect(comments).toContain("interior_face");
+  });
+});
+
+describe("spandrel materials", () => {
+  it("planar flood coat: opaque, and reads as the finish through the glass", () => {
+    const solved = solvePlanar(floodCoatIgu);
+    const material = solved.materials[0];
+    const front = evaluateAtNormalIncidence(material.layers);
+
+    expect(luminance(front.transmit)).toBe(0);
+    expect(luminance(front.reflect)).toBeCloseTo(luminance(solved.derived.spandrel!.readsAs), 3);
+    // Reads darker than the finish alone (glass absorbs twice) but brighter than bare glass.
+    expect(luminance(front.reflect)).toBeGreaterThan(luminance(solved.derived.spandrel!.glassOnly));
+    expect(luminance(front.reflect)).toBeLessThan(
+      luminance(solved.derived.spandrel!.finish) + luminance(solved.derived.spandrel!.glassOnly),
+    );
+    expect(material.backface).toBeDefined();
+    expect(luminance(evaluateAtNormalIncidence(material.backface!.layers).transmit)).toBe(0);
+  });
+
+  it("volumetric flood coat: paint on the interior face only, glass everywhere else", () => {
+    const solved = solveVolumetric(floodCoatIgu);
+    const painted = solved.materials[1]; // #4 is the back of the inner lite
+    const outer = solved.materials[0];
+
+    const top = painted.layers[0];
+    expect(top.kind).toBe("diffuse");
+    expect(top.kind === "diffuse" && top.interiorFaceOnly).toBe(true);
+    expect(painted.params.some((p) => p.name === "interior_face")).toBe(true);
+    expect(painted.volume).toBeDefined(); // the glass body is still glass
+
+    const exterior = evaluateAtNormalIncidence(painted.layers, false);
+    const interior = evaluateAtNormalIncidence(painted.layers, true);
+    expect(luminance(exterior.transmit)).toBeGreaterThan(0.9); // glass face passes light
+    expect(luminance(interior.transmit)).toBe(0);
+    expect(interior.reflect).toEqual(solved.derived.spandrel!.finish);
+
+    // The outer, coated lite is untouched by the spandrel.
+    expect(outer.layers.some((l) => l.kind === "diffuse")).toBe(false);
+    expect(solved.materials.map((m) => m.name)).toEqual(["flood_coat_igu_outer", "flood_coat_igu_inner"]);
+  });
+
+  it("volumetric flood coat on a monolithic lite keeps the uncoated ior signature", () => {
+    const painted = solveVolumetric(floodCoatMonolithic).materials[0];
+    expect(painted.params.map((p) => p.name)).toEqual(["ior", "interior_face"]);
+    expect(painted.layers.map((l) => l.kind)).toEqual(["diffuse", "specular-base"]);
+  });
+
+  it("back pan: the glass is ordinary and the pan is its own opaque material", () => {
+    const solved = solveVolumetric(backPanMatte);
+    expect(solved.materials.map((m) => m.name)).toEqual([
+      "back_pan_matte_outer",
+      "back_pan_matte_inner",
+      "back_pan_matte_pan",
+    ]);
+    const pan = solved.materials[2];
+    expect(pan.layers).toEqual([{ kind: "diffuse", color: solved.derived.spandrel!.finish }]);
+    expect(pan.volume).toBeUndefined();
+    expect(pan.params).toHaveLength(0);
+    for (const glass of solved.materials.slice(0, 2)) {
+      expect(glass.layers.some((l) => l.kind === "diffuse")).toBe(false);
+    }
+    expect(solved.warnings.some((w) => w.code === "spandrel-pan-assignment")).toBe(true);
+  });
+
+  it("metallic pan lowers to a glossy reflector", () => {
+    const pan = solveVolumetric(backPanMetallic).materials.at(-1)!;
+    expect(pan.layers[0].kind).toBe("metal");
+    const planar = solvePlanar(backPanMetallic);
+    expect(planar.materials.at(-1)!.layers[0].kind).toBe("metal");
+    expect(planar.warnings.some((w) => w.code === "spandrel-pan-plane")).toBe(true);
   });
 });

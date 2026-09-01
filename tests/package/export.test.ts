@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { unzipSync, strFromU8 } from "fflate";
 import { fraction } from "@/engine";
 import { buildExport } from "@/engine/package/exportBundle";
-import { dotFrit, maskFrit, solarban60, MASK_BYTES } from "../mdl/fixtures";
+import { backPanMatte, dotFrit, floodCoatIgu, maskFrit, solarban60, MASK_BYTES } from "../mdl/fixtures";
 
 /** Unpack a bundle the way a user's ZIP tool would. */
 function unpack(zip: Uint8Array) {
@@ -127,6 +127,45 @@ describe("bind manifest", () => {
     expect(spec.frit_decal.type_name).toContain("_frit_decal(");
     expect(spec.by_position.outer).toBeDefined();
     expect(Object.keys(spec.by_position)).not.toContain("frit_decal");
+  });
+});
+
+describe("spandrel exports", () => {
+  it("ships the back pan as a second type with a default position", () => {
+    const unpacked = unpack(buildExport(backPanMatte, "volumetric").zip);
+    const manifest = JSON.parse(unpacked.text("bind_manifest.json"));
+
+    expect(Object.keys(manifest.types).sort()).toEqual(["back_pan_matte", "back_pan_matte_pan"]);
+    const pan = manifest.types.back_pan_matte_pan;
+    expect(pan.by_position._default.type_name).toContain("back_pan_matte_pan(");
+    expect(pan.roller_wave).toBe(false);
+    expect(manifest.types.back_pan_matte.by_position.outer).toBeDefined();
+
+    const readme = unpacked.text("README.txt");
+    expect(readme).toContain("back_pan_matte_pan");
+    expect(readme).toContain("Mark selection as this type");
+    expect(readme).toContain("SPANDREL");
+  });
+
+  it("drives the flood coat through the interior_face slot on the painted lite", () => {
+    const unpacked = unpack(buildExport(floodCoatIgu, "volumetric").zip);
+    const manifest = JSON.parse(unpacked.text("bind_manifest.json"));
+    const inner = manifest.types.flood_coat_igu.by_position.inner;
+
+    expect(inner.type_name).toContain("flood_coat_igu_inner(float,bool)");
+    expect(inner.slot_params.interior.interior_face).toBe(true);
+    expect(inner.slot_params.exterior.interior_face).toBe(false);
+    expect(inner.params.ior).toBeCloseTo(1.52, 6);
+    expect(Object.keys(manifest.types)).toEqual(["flood_coat_igu"]);
+
+    const readme = unpacked.text("README.txt");
+    expect(readme).toContain("Flood coat on surface #4");
+    expect(readme.replace(/\s+/g, " ")).toContain("the panel reads as");
+  });
+
+  it("emits the flood coat as a bsdf conditional on interior_face, never a mix", () => {
+    const source = unpack(buildExport(floodCoatIgu, "volumetric").zip).text(".mdl");
+    expect(source).toContain("interior_face ? df::diffuse_reflection_bsdf(");
   });
 });
 

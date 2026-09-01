@@ -1,11 +1,19 @@
-import { fitAssembly } from "../physics/assembly";
+import { fitAssembly, spandrelAppearance, type AssemblyFit, type SpandrelAppearance } from "../physics/assembly";
+import { clampRGB, gray, luminance, zipRGB } from "../physics/color";
 import { GLASS_IOR } from "../physics/constants";
 import { toIdentifier } from "../mdl/naming";
 import type { LayerIR, MaterialIR } from "../types/ir";
-import type { GlazingSystemInput } from "../types/system";
+import type { GlazingSystemInput, SpandrelInput } from "../types/system";
 import type { SolverWarning } from "../types/issues";
 import type { DerivedOptics } from "../types/optics";
-import { buildDerived, coatingLayer, compensateForLayer, provenanceComments } from "./common";
+import {
+  buildDerived,
+  coatingLayer,
+  compensateForLayer,
+  describeFinish,
+  finishLayer,
+  provenanceComments,
+} from "./common";
 import { lowerFrit } from "./frit";
 import { rollerWaveTexture } from "./rollerWave";
 
@@ -29,6 +37,12 @@ export interface SolveOutput {
 export function solvePlanar(input: GlazingSystemInput): SolveOutput {
   const fit = fitAssembly(input);
   const warnings: SolverWarning[] = [];
+
+  const spandrel = spandrelAppearance(fit, input);
+  if (input.spandrel?.kind === "flood-coat" && spandrel) {
+    return floodCoatPlanar(input, input.spandrel, fit, spandrel);
+  }
+
   const notes: string[] = [
     "Apply to a single flat surface with no thickness. Do not use on a solid.",
     "Interior appearance comes from the material's backface; keep face normals pointing outward.",
@@ -134,5 +148,83 @@ export function solvePlanar(input: GlazingSystemInput): SolveOutput {
   }
 
   material.comments = [...provenanceComments(input, "planar", fit, notes), ...material.comments];
-  return { materials: [material], derived: buildDerived(input, fit), warnings, textures };
+  const materials = [material];
+
+  // Shadow box: the glass plane keeps the ordinary planar material; the pan
+  // is a second plane behind it with its own opaque material.
+  if (input.spandrel?.kind === "back-pan" && spandrel) {
+    const pan = input.spandrel;
+    materials.push({
+      name: `${prefix}_pan`,
+      displayName: `${input.name} - back pan`,
+      description: `${pan.finish} back pan, ${pan.cavity}mm behind the glass`,
+      thinWalled: true,
+      ior: GLASS_IOR,
+      layers: [finishLayer(pan, spandrel.finish)],
+      params: [],
+      moduleFunctions: [],
+      comments: provenanceComments(input, "planar", fit, [
+        `Apply to a second plane ${pan.cavity}mm behind the glass plane, facing outward, matching its outline.`,
+        `${describeFinish(pan, spandrel.finish)}. Seen from outside through the glass the panel reads as ${(luminance(spandrel.readsAs) * 100).toFixed(1)}%.`,
+      ]),
+    });
+    warnings.push({
+      code: "spandrel-pan-plane",
+      message: `The back pan exports as its own material (${prefix}_pan) for a second plane ${pan.cavity}mm behind the glass plane. The README has the placement.`,
+    });
+  }
+
+  return { materials, derived: buildDerived(input, fit), warnings, textures };
+}
+
+/**
+ * A flood-coated spandrel as one opaque surface: the glass stack's own
+ * reflection sits in the Fresnel layer, and whatever the paint adds through
+ * the glass sits in a diffuse base underneath, pre-divided by what the layer
+ * holds back so the two compose to the reads-as colour. Nothing transmits;
+ * the interior side is the dark nothing behind a spandrel.
+ */
+function floodCoatPlanar(
+  input: GlazingSystemInput,
+  spandrel: SpandrelInput & { kind: "flood-coat" },
+  fit: AssemblyFit,
+  appearance: SpandrelAppearance,
+): SolveOutput {
+  const front = coatingLayer(appearance.glassOnly);
+  const added = clampRGB(zipRGB(appearance.readsAs, appearance.glassOnly, (a, b) => a - b), 0, 1);
+  const base = compensateForLayer(added, front.normalReflectivity);
+
+  const layers: LayerIR[] = [front, { kind: "diffuse", color: base.tint }];
+  const backLayers: LayerIR[] = [{ kind: "diffuse", color: gray(0.06) }];
+
+  const notes: string[] = [
+    "Apply to a single flat surface with no thickness. Do not use on a solid.",
+    `Opaque spandrel: the whole build-up over a ${describeFinish(spandrel, appearance.finish)}, collapsed to one surface. Nothing transmits.`,
+    `Seen from outside the panel reads as ${(luminance(appearance.readsAs) * 100).toFixed(1)}%; the finish colour is taken as given, since no data sheet measures it.`,
+    "The interior side is a dark neutral: what sits behind a spandrel is insulation or a pan, never glass.",
+  ];
+
+  const textures: { fileName: string; bytes: Uint8Array }[] = [];
+  if (input.rollerWave) {
+    textures.push(rollerWaveTexture());
+    notes.push(
+      "Roller wave: wire the bundled roller_wave_bump.png into the material's geometry normal channel in Max (see the README). Assumes 1 UV unit = 1 meter.",
+    );
+  }
+
+  const prefix = toIdentifier(input.name);
+  const material: MaterialIR = {
+    name: `${prefix}_planar`,
+    displayName: `${input.name} (planar)`,
+    description: `Spandrel: whole build-up plus flood coat on #${spandrel.surface}, as a single opaque surface.`,
+    thinWalled: true,
+    ior: GLASS_IOR,
+    layers,
+    backface: { layers: backLayers },
+    params: [],
+    moduleFunctions: [],
+    comments: provenanceComments(input, "planar", fit, notes),
+  };
+
+  return { materials: [material], derived: buildDerived(input, fit), warnings: [], textures };
 }

@@ -1,6 +1,7 @@
 import { SCHLICK_EXPONENT } from "../../physics/constants";
 import type { FritWeightSource, LayerIR } from "../../types/ir";
-import { call, colorLiteral, num, type ImportTracker, type MdlExpr } from "./writer";
+import type { RGB } from "../../types/optics";
+import { call, colorLiteral, num, renderInline, type ImportTracker, type MdlExpr } from "./writer";
 
 /**
  * Lowering the layer stack into MDL distribution functions.
@@ -59,6 +60,19 @@ function scatterMode(imports: ImportTracker, mode: "reflect" | "transmit" | "ref
   return imports.ref("df", `scatter_${mode}`);
 }
 
+function diffuseBsdf(imports: ImportTracker, color: RGB): MdlExpr {
+  return call(imports.ref("df", "diffuse_reflection_bsdf"), [["tint", colorLiteral(color)]]);
+}
+
+/** A metallic finish: glossy reflection in the metal's own colour, nothing transmitted. */
+function metalBsdf(imports: ImportTracker, layer: LayerIR & { kind: "metal" }): MdlExpr {
+  return call(imports.ref("df", "simple_glossy_bsdf"), [
+    ["roughness_u", num(layer.roughness)],
+    ["tint", colorLiteral(layer.color)],
+    ["mode", scatterMode(imports, "reflect")],
+  ]);
+}
+
 /** The innermost layer, which terminates the nesting. */
 function baseBsdf(imports: ImportTracker, layer: LayerIR): MdlExpr {
   switch (layer.kind) {
@@ -68,7 +82,9 @@ function baseBsdf(imports: ImportTracker, layer: LayerIR): MdlExpr {
         ["mode", scatterMode(imports, layer.scatterMode)],
       ]);
     case "diffuse":
-      return call(imports.ref("df", "diffuse_reflection_bsdf"), [["tint", colorLiteral(layer.color)]]);
+      return diffuseBsdf(imports, layer.color);
+    case "metal":
+      return metalBsdf(imports, layer);
     case "frit":
       return fritBsdf(imports, layer);
     case "fresnel-coating":
@@ -123,9 +139,24 @@ function wrap(imports: ImportTracker, layer: LayerIR, base: MdlExpr, scaleParam:
       ]);
 
     case "diffuse":
+      if (layer.interiorFaceOnly) {
+        // A flood coat on one face of a solid: the Material ID that turns
+        // interior_face on gets the opaque paint in place of the glass stack;
+        // every other ID keeps the glass. A bsdf conditional on a uniform
+        // parameter, rather than a weighted mix, because the paint has to
+        // REPLACE the interface — the exterior face must not see it at all.
+        return `${INTERIOR_FACE_PARAM} ? ${renderInline(diffuseBsdf(imports, layer.color))} : ${renderInline(base)}`;
+      }
       return call(imports.ref("df", "weighted_layer"), [
         ["weight", num(1)],
-        ["layer", call(imports.ref("df", "diffuse_reflection_bsdf"), [["tint", colorLiteral(layer.color)]])],
+        ["layer", diffuseBsdf(imports, layer.color)],
+        ["base", base],
+      ]);
+
+    case "metal":
+      return call(imports.ref("df", "weighted_layer"), [
+        ["weight", num(1)],
+        ["layer", metalBsdf(imports, layer)],
         ["base", base],
       ]);
 

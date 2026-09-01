@@ -1,142 +1,92 @@
-# Spandrel support — preliminary plan
+# Spandrel support
 
-**Status: planned, not built** (2026-09-01, end of the TGU field-test
-session). Scope decisions below are Jeff's; pick this up from here.
+**Status (2026-09-01): engine slice built (flood coat + back pan, both
+pipelines); UI, Max pan tagging, and the two kit renders still to do.** Scope
+is Jeff's, revised in the 2026-09-01 interview; the earlier draft assumed a
+spandrel had its own data sheet to solve against. It does not.
 
-## Context
+## What a spandrel is, for this tool
 
-With vision glazing field-validated on the GL31X facade, the next facade
-element is spandrel — the model already carries Spandrel-Nose/Podium/Tower
-layers. Per Jeff: v1 covers BOTH spandrel constructions (back-painted /
-opacified glass AND shadow-box: glass + air cavity + opaque metal back
-pan), build-ups vary (monolithic and IGU both), and the available
-data-sheet inputs are unknown for now — design all input paths, calibrate
-the card copy once Jeff pulls a real spandrel data sheet.
+A normal glazing build-up chosen from a glazing data sheet (coated or not),
+plus an opaque finish the manufacturer offers behind it:
 
-Engine readiness (explored): `LayerIR` already has the `diffuse` kind —
-"spandrel/back-painted; reserved for P5" (`src/engine/types/ir.ts:47`) —
-and BOTH emitter cases exist in `src/engine/mdl/emit/layers.ts`
-(`baseBsdf` → `df::diffuse_reflection_bsdf`, `wrap` → weighted_layer).
-The work is everything around it.
+- **flood coat** — opaque paint fused to the back of a lite, typically #4 on
+  a double unit (what Jeff's architects usually do), or
+- **back pan** — a metal pan behind an air cavity (shadow box), matte or
+  metallic.
 
-## Input model (`src/engine/types/system.ts` + `src/engine/index.ts` re-export)
+There is no spandrel data sheet. The glass is fitted exactly as vision glass
+(VLT stays enabled; it is the glass's VLT), and the finish colour is taken
+as given — the one place a colour sets level as well as hue. The tool's job
+is the export plus a forward "reads as, from outside" colour: the finish seen
+through the fitted glass, which is what the Iray render is judged against.
+See `docs/physics.md` → Spandrel.
 
-```ts
-spandrel?:
-  | { kind: "back-paint"; surface: SurfaceNumber; color: ColorSpec }
-  | { kind: "shadow-box"; cavityMm: number;
-      pan: { color: ColorSpec; finish?: "matte" | "metallic" } }
-```
-Top-level optional, like `frit`/`rollerWave`. Back-paint surface is
-typically the last surface (`maxSurface(lites.length)`); validate range,
-warn on non-final placement. Shadow-box's pan is a terminal element after
-the last lite — no change to `lites`/`gaps` shape.
+Decisions: both finishes in v1, matte and metallic pans, both pipelines, own
+product and own ZIP (a spandrel is the vision build-up plus a finish and a
+new name — the store holds one system, so "start from vision" is just that),
+flood coat fully opaque (the pan behind it never renders), colour by RAL
+number / manufacturer chart eyedrop / sample photo. Frit and spandrel are
+mutually exclusive.
 
-## Physics / solver
+## Built (engine, `src/engine`)
 
-- **Seeding**: `naturalAssemblyOptics` / `seededAssembly`
-  (`src/lib/store.ts:44`) get a spandrel branch — `tvis: 0`, `rvisExt` =
-  glass first-surface + double-pass-attenuated paint/pan reflectance
-  (reuse `slabOptics` / interface math in `physics/slab.ts`). Without this,
-  any lite edit re-seeds VLT to ~0.88.
-- **Fit** (`physics/assembly.ts`): no coordinate descent. When Rvis-ext is
-  entered, solve the paint/pan reflectance so the composed exterior
-  matches (level from the %, hue from the color spec — the tool's
-  standing rule). When only a color is given, render it at face value.
-  Unreachable targets (below bare Fresnel ~4.3%) report through the
-  existing `fitResidual` → verdict channel.
-- Interior face default: dark neutral diffuse (slab/insulation behind);
-  revisit if Jeff's sheets say otherwise.
+- Input: `spandrel?: SpandrelInput` on `GlazingSystemInput` (`types/system.ts`).
+- Forward appearance: `spandrelAppearance` in `physics/assembly.ts` →
+  `DerivedOptics.spandrel { readsAs, glassOnly, finish }`.
+  `resolveColorSpecAbsolute` (colorimetry) keeps a colour's level.
+- IR: `diffuse` gains `interiorFaceOnly`; new `metal` kind. The emitter
+  lowers an interior-only diffuse to a **bsdf conditional** on the existing
+  `interior_face` bool (`interior_face ? diffuse : glass`) — new structure,
+  gated by validation-kit test 12; metal → `simple_glossy_bsdf`, kit test 13.
+- Volumetric: the painted lite keeps its glass shape and gains the
+  conditional paint on ID 2 (+ `interior_face` param if it had none, so the
+  manifest's `slot_params` drive it); lites behind the paint export as plain
+  glass. A back pan is its own material `${prefix}_pan`, shipped in the
+  manifest as a second type with `by_position._default` and
+  `roller_wave: false`.
+- Planar: flood coat = one opaque thin-walled surface (glass reflection layer
+  over a diffuse base compensated so the two compose to `readsAs`; dark
+  backface). Back pan = the ordinary planar glass plus a `_pan` plane
+  material; README places it at the cavity depth.
+- Validation: surface must be a back face, range, frit exclusion, coating
+  hidden under the paint (warning), cavity required / unusual, Material-ID
+  note for volumetric flood coats.
+- README/provenance name the finish and the reads-as colour. Tests: fixtures
+  + goldens for 7 spandrel exports, semantics, physics, export, validation.
 
-## IR / emitters (`src/engine/solve/volumetric.ts`, `planar.ts`)
+## To do
 
-- **Back-paint, volumetric**: the painted lite keeps the existing
-  Material-ID structure; its interior-face layer stack becomes `diffuse`
-  (paint) — the `interior_face` ternary already selects per-face, and the
-  `diffuse` emitter case exists. Exterior face + shared volume unchanged.
-- **Back-paint, planar**: thin-walled `[fresnel-coating (glass), diffuse]`,
-  `backface` diffuse, zero transmission.
-- **Shadow-box, volumetric**: glass lite(s) = normal (un)coated lite
-  materials; the pan is a SEPARATE opaque material (diffuse; same on all
-  IDs) — depth comes from real geometry.
-- **Shadow-box, planar**: glass plane material + pan plane material, two
-  planes in the scene; README documents the offset.
-- Frit on a spandrel: out of v1 (full-coverage opacifier is the frit).
+1. **UI** (`src/components/GlazingForm/`): store `spandrel` + actions and
+   `setLiteCount` pruning; a third feature card "Spandrel finish" (kind
+   toggle, back-face surface select or cavity + finish, colour by RAL number
+   → hex table, hex/eyedrop, label); diagram tag for the flood coat and an
+   opaque terminal bar for the pan; condensed-bar pill; colour panel shows
+   "Spandrel, seen from outside" (`readsAs`) and marks looking-through as
+   opaque; ghost card n-of-3.
+2. **Max apply script**: pans that fail the lite test cannot be tagged today
+   → a "Tag selection as pan" path (stamps tagged/type/position without face
+   IDs). Honour the manifest's `roller_wave: false`. A pan modelled as a thin
+   solid sheet passes `_pair_sheets` as a lite and would turn a DGU spandrel
+   into outer/center/inner — decide a minimum sheet thickness screen after
+   the workstation check (W1 below). `bind()` already leaves foreign products
+   and unknown positions alone (2026-09-01 fix).
+3. **Kit renders 12 and 13** on the workstation before any spandrel ZIP goes
+   to a project (render gate). Then the field model: vision lites bound,
+   select spandrels, Assign the spandrel ZIP, confirm no clobbering, render.
+4. RAL classic → sRGB table (small, public); Pantone stays eyedrop-by-eye.
 
-## Manifest / README (`src/engine/package/manifest.ts`, `readme.ts`)
+## Open loops (away from the desk)
 
-- Painted lite rides the existing positional `by_position` entries.
-- Shadow-box pan ships as its own manifest TYPE entry (not a `by_position`
-  slot) so the Max GUI's existing multi-type flow (type combo + "Mark
-  selection as this type") assigns it — no new GUI mechanism.
-- README: which pane, paint on which surface, pan assignment note.
-- Gotcha: `typeName` embeds the param signature — param changes rename the
-  MDL type (revision suffix already handles Max caching).
+Workstation: **W1** Debug shells on one spandrel panel (lites found: 2 or 3;
+the pan shell's verdict and thickness; does the inner lite exist as glass).
+**W2** cavity depth glass→pan (grouping threshold is 150mm). **W3** on
+planar-modelled facades, is there a pan surface to assign to? **W4** the TGU
+split's Iray render is still owed; confirm before the two-ZIP field check.
+**W5** kit renders 12 and 13.
 
-## UI (touch list from exploration)
-
-- `src/lib/store.ts`: `spandrel` field + set/update/remove actions,
-  `setLiteCount` pruning, `seededAssembly` branch, `defaultSpandrel()`
-  (mirror `defaultFrit`, store.ts:221).
-- `SurfaceDiagram.tsx`: extend `DiagramFeature` union; third feature
-  prop on `SurfaceDiagram`/`MiniSection`; `SurfaceMarker` flags +
-  `occupied`; `featureTagY` 3-slot stacking; shadow-box renders the pan
-  as an opaque terminal bar after the last cavity (new element, not a
-  surface tag).
-- `DiagramPanel.tsx`: `canAddSpandrel`, `handleAddAt` "exactly one kind
-  remaining" logic, chooser button, `jumpToFeature` anchor, `CondensedBar`
-  pill.
-- `FeatureCards.tsx`: `SpandrelCard` on `FeatureCardShell` — kind toggle
-  (Back paint / Shadow box), surface select OR cavity+pan fields, color
-  via the `ColorSpec` editor (generalize `ColorEditor`/`TypedInputs` off
-  `ColorKey` so Lab/xy datasheet entry works for paint); ghost-card
-  n-of-3 logic in `SurfaceFeaturesGhost`.
-- `AssemblySection.tsx`: VLT `PercentInput` disabled (prop exists) + tvis
-  forced 0 + copy; energy bar becomes reflected + absorbed. `NumberStrip`
-  in DiagramPanel hardcodes the three spans — adjust.
-- `fitVerdict.ts` + `ResultSection.tsx` `FitTable`: parameterize
-  `FIT_QUANTITIES` and pass the reflectance-only subset for spandrels.
-- Tag color: use the remaining `--danger`/`--success` soft pair tokens.
-
-## Max apply script (`scripts/max/glass2mdl_apply.py`)
-
-- Detection/tagging needs nothing: spandrel geometry is lite-shaped and
-  "spandrel" is already in GLAZING_NAME_HINTS; monolithic panels get
-  position "monolithic"; welded panels go through sheet pairing as now.
-- **REQUIRED FIX — two-product clobbering**: `do_bind`'s single-type
-  branch re-stamps EVERYTHING tagged to the manifest's type, so assigning
-  a spandrel ZIP after the vision ZIP clobbers the vision lites. Fix:
-  when a viewport selection exists, single-type Assign stamps/binds only
-  the selection; empty selection keeps apply-to-all with its messaging.
-- Shadow-box pans: expected to pass the lite test as thin sheets and bind
-  through the multi-type Mark-selection flow; if real pans are modeled
-  otherwise, `debug_shells` tells us and we adapt (decision point during
-  implementation, with field geometry in hand).
-
-## Tests
-
-- Fixtures in `tests/mdl/fixtures.ts`: back-paint monolithic, back-paint
-  IGU, shadow-box — planar + volumetric; goldens via
-  `UPDATE_GOLDEN=1 pnpm test` (review diffs).
-- `semantics.test.ts`: `evaluateAtNormalIncidence` needs a `diffuse`
-  branch (it currently zeros unknown innermost layers); assert
-  transmission exactly 0 and exterior reflection = glass over paint.
-- `export.test.ts`: manifest shape (pan as sibling type), README naming.
-- Physics round-trip: entered Rvis-ext reproduced by the composed stack.
-
-## Rollout order (one deliverable, staged internally)
-
-1. Back-paint end-to-end (engine → UI → export) — smallest full slice.
-2. Max two-product assign fix + field test on the real model (vision +
-   spandrel ZIPs coexisting).
-3. Shadow-box (pan element, second manifest type, pan assignment flow).
-4. Calibrate the data-sheet card copy against a real spandrel sheet from
-   Jeff; adjust inputs if sheets carry values we didn't anticipate.
-
-## Verification
-
-`pnpm test` green at each stage (goldens reviewed, not rubber-stamped);
-synthetic Max scene with a spandrel box + pan; then Jeff's model: vision
-lites already bound → select spandrels → Assign spandrel ZIP → confirm no
-clobbering, QA, Iray render (opaque with glass reflection; shadow-box
-reads with depth).
+Teammates / manufacturers: **T1** how pan finishes are specified when they
+reach you (Kynar names, RAL, anodized) and how often pans are metallic.
+**T2** flood coat type (ceramic frit vs silicone opacifier): confirm nobody
+needs translucency. **T3** Pantone-by-eye acceptable? **T4** do spandrel and
+vision share the coating on typical projects (affects only copy).

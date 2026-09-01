@@ -139,6 +139,32 @@ information that the entered numbers do not describe the configured build-up.
 Targets outside what any real construction can produce return the closest
 achievable answer plus a residual, rather than failing.
 
+## Spandrel: the finish is taken as given
+
+A spandrel is not a product with its own data sheet. It is a glazing build-up
+chosen from an ordinary glazing sheet — coated or not — with an opaque finish
+the manufacturer offers behind it: a flood coat (opaque paint fused to the
+back of a lite, typically #4 on a double unit) or a metal back pan behind an
+air cavity (a shadow box). So the glass is fitted exactly as vision glass, and
+the finish is the one place in the tool where a colour sets **level as well as
+hue**: nothing measures it, so it is applied at face value and the result is
+reported rather than solved for.
+
+The forward calculation reuses the slab and stack relations above. A flood
+coat replaces the painted lite's back interface with an opaque reflector,
+`r_ext = ρ`, `r_int = 0`, `τ = 0`, where `ρ` is the finish albedo per channel;
+lites behind it are hidden and dropped. A back pan is an opaque element
+`T = 0, Rf = ρ` after the whole glass stack, the cavity being optically empty.
+Either way the number that matters is the exterior reflectance of the
+composed panel — the finish seen through this glass, darkened by a double
+pass through every lite in front of it and topped by their own reflections —
+because that, not the finish alone, is what a render has to be judged
+against. The tool reports it as "reads as" beside the glass's own reflection.
+
+A metallic pan finish keeps the same albedo for that number and lowers to a
+glossy reflector in the export; its angular look is a BSDF assumption, not
+data.
+
 ## Known approximations
 
 **Coated volumetric export: structure decided, emitter pending.** MDL applies a

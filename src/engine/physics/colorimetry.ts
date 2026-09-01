@@ -1,6 +1,6 @@
 import type { ColorSpec } from "../types/color";
 import type { RGB } from "../types/optics";
-import { clampRGB, hexToLinearRGB, scaleRGB } from "./color";
+import { clampRGB, hexToLinearRGB, scaleRGB, scaleToLuminance } from "./color";
 
 /**
  * CIE colour conversions for measured glazing colour data.
@@ -126,6 +126,22 @@ export function resolveColorSpec(spec: ColorSpec | undefined, fallback: RGB): RG
   if (peak <= 1e-6) return fallback;
 
   return scaleRGB(clamped, 1 / peak);
+}
+
+/**
+ * Resolve a colour spec with its level intact: the albedo of a painted or
+ * metal finish, where nothing on a data sheet measures the level and the
+ * colour is all there is. L* and a swatch carry lightness; chromaticity alone
+ * does not, so x,y lands at a mid-grey level with the entered hue.
+ */
+export function resolveColorSpecAbsolute(spec: ColorSpec | undefined, fallback: RGB): RGB {
+  if (!spec || spec.kind === "auto") return fallback;
+  if (spec.kind === "xy") {
+    return clampRGB(scaleToLuminance(resolveColorSpec(spec, fallback), 0.18), 0, 1);
+  }
+  const raw =
+    spec.kind === "lab" ? xyzToLinearRGB(labToXYZ(spec.L, spec.a, spec.b)) : hexToLinearRGB(spec.hex);
+  return clampRGB(raw, 0, 1);
 }
 
 /**

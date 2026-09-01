@@ -1,0 +1,59 @@
+mdl 1.6;
+
+import ::anno::*;
+import ::df::*;
+
+// Does a glossy metal read correctly behind a glass solid?
+//
+// Setup: Place a 1m x 1m plane 100mm behind the test 07 reference box (the
+// box between camera and plane), assign 13a to the plane and 13b to the
+// box. Render at normal incidence and at about 45 degrees.
+//
+// Expected: A brushed-metal BLUE panel seen through glass: a soft highlight
+// that moves with the view, sharper than the matte 12 paint and never a
+// mirror. At 45 degrees the glass reflection strengthens over it. If the
+// plane renders black or invisible, simple_glossy_bsdf is not being
+// honoured through the glass and the metallic finish needs a different
+// BSDF.
+
+// Apply to the plane behind the glass box.
+
+export material test13_metal_pan()
+[[
+    anno::display_name("13a metallic back pan"),
+    anno::description("13a metallic back pan"),
+    anno::author("glass2mdl 0.1.0")
+]]
+= material(
+    thin_walled: true,
+    surface: material_surface(
+        scattering: df::simple_glossy_bsdf(
+            roughness_u: 0.3,
+            tint: color(0.1, 0.2, 0.9),
+            mode: df::scatter_reflect
+        )
+    ),
+    ior: color(1.52)
+);
+
+// Apply to the 6mm box in front of the pan.
+
+export material test13_host_glass()
+[[
+    anno::display_name("13b host glass solid"),
+    anno::description("13b host glass solid"),
+    anno::author("glass2mdl 0.1.0")
+]]
+= material(
+    thin_walled: false,
+    surface: material_surface(
+        scattering: df::specular_bsdf(
+            tint: color(1.0, 1.0, 1.0),
+            mode: df::scatter_reflect_transmit
+        )
+    ),
+    ior: color(1.52),
+    volume: material_volume(
+        absorption_coefficient: color(7.15125, 7.15125, 7.15125)
+    )
+);

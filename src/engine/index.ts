@@ -23,6 +23,8 @@ export type {
   ExportMode,
   FritInput,
   RollerWaveInput,
+  SpandrelFinish,
+  SpandrelInput,
   FritPattern,
   GapInput,
   GlazingSystemInput,
@@ -46,6 +48,7 @@ export {
   lightnessToLuminance,
   luminanceToLightness,
   resolveColorSpec,
+  resolveColorSpecAbsolute,
   xyYToXYZ,
   xyzToLab,
   xyzToLinearRGB,
@@ -58,7 +61,11 @@ export {
   fitResidual,
   naturalAssemblyOptics,
   nominalAssemblyHue,
+  spandrelAppearance,
+  DEFAULT_FINISH_ALBEDO,
 } from "./physics/assembly";
+export type { SpandrelAppearance } from "./physics/assembly";
+export { describeFinish, describeFinishColor } from "./solve/common";
 export { SUBSTRATE_LABELS, SUBSTRATE_INTERNAL_T_6MM, GLASS_IOR, DEFAULT_FRIT_OPACITY } from "./physics/constants";
 export { luminance, hexToLinearRGB, linearRGBToHex, gray, clampRGB } from "./physics/color";
 export { patternCoverage } from "./solve/frit";

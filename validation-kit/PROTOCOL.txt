@@ -172,30 +172,8 @@ File: 08_frit_pattern_scale.mdl
     test08_frit_pattern  (08 frit pattern scale)
 
 ------------------------------------------------------------------------
-TEST 09: Does the roller wave normal map ripple reflections at true scale?
-File: 09_roller_wave.mdl
-
-  Setup:
-    Copy roller_wave_normal.png (emitted next to this kit) beside
-    the .mdl. Apply to a 1m x 1m plane AND to the closed box, both
-    with a 1.0m x 1.0m UVW Map. Set roller_wave_strength to 0.05
-    first so success is unmistakable, then return it to the
-    default. View a bright reflection at a grazing angle.
-
-  Expected:
-    Reflections ripple in horizontal bands with roughly a 300mm
-    period, and the ripple visibly varies across the surface rather
-    than repeating a uniform sine. 0 turns the surface optically
-    flat. If test 11 shows stripes but this stays flat at any
-    strength, material_geometry.normal is the broken link in this
-    build (see the roller wave decision table at the end).
-
-  Materials:
-    test09_roller_wave  (09 roller wave)
-
-------------------------------------------------------------------------
-TEST 10: Does state::object_id() give materials per-object identity?
-File: 10_object_variation.mdl
+TEST 09: Does state::object_id() give materials per-object identity?
+File: 09_object_variation.mdl
 
   Setup:
     Apply this one material to four or more separate boxes and
@@ -209,27 +187,53 @@ File: 10_object_variation.mdl
     material.
 
   Materials:
-    test10_object_variation  (10 object id probe)
+    test09_object_variation  (09 object id probe)
 
 ------------------------------------------------------------------------
-TEST 11: Does the shipped roller_wave_normal.png decode in this build at all?
-File: 11_texture_decode.mdl
+TEST 10: Does a bsdf conditional on interior_face put paint on one face of a solid?
+File: 12_flood_coat_faceid.mdl
 
   Setup:
-    Copy roller_wave_normal.png beside the .mdl. Apply to the 1m x
-    1m plane with its 1.0m x 1.0m UVW Map and render flat-on. This
-    wires the SAME image into a visible color slot through the
-    render-validated frit mask path, so it isolates texture loading
-    from everything the normal path adds.
+    The Material-ID box (ID 1 exterior, ID 2 the opposite face, ID
+    3 edges). Assign this ONE material to all three slots of a
+    Multi-Sub-Object, with interior_face OFF in slots 1 and 3 and
+    ON in slot 2. View the box from the ID 1 side, then from the ID
+    2 side.
 
   Expected:
-    Soft horizontal red banding with roughly a 300mm period (the
-    normal map's channels read as brightness). Uniform red with no
-    banding means Iray could not decode the shipped PNG, and no red
-    at all means the texture failed to load entirely.
+    From the ID 1 side: clear glass with a faint Fresnel reflection
+    over a RED interior — the paint seen through 6mm of glass,
+    slightly darkened. From the ID 2 side: flat matte RED, no
+    glassiness, nothing transmitted. If the ID 1 side shows red
+    paint AT the surface (no glass depth, no reflection), the
+    conditional collapsed to the diffuse branch and flood coats
+    need a second material per face instead. If the ID 2 side shows
+    glass, the conditional was ignored.
 
   Materials:
-    test11_texture_decode  (11 texture decode probe)
+    test12_flood_coat  (12 flood coat via interior_face)
+
+------------------------------------------------------------------------
+TEST 11: Does a glossy metal read correctly behind a glass solid?
+File: 13_metal_pan.mdl
+
+  Setup:
+    Place a 1m x 1m plane 100mm behind the test 07 reference box
+    (the box between camera and plane), assign 13a to the plane and
+    13b to the box. Render at normal incidence and at about 45
+    degrees.
+
+  Expected:
+    A brushed-metal BLUE panel seen through glass: a soft highlight
+    that moves with the view, sharper than the matte 12 paint and
+    never a mirror. At 45 degrees the glass reflection strengthens
+    over it. If the plane renders black or invisible,
+    simple_glossy_bsdf is not being honoured through the glass and
+    the metallic finish needs a different BSDF.
+
+  Materials:
+    test13_metal_pan  (13a metallic back pan)
+    test13_host_glass  (13b host glass solid)
 
 ========================================================================
 RESULTS
@@ -243,9 +247,9 @@ Test  Loaded  Matched expectation  Notes
 06    [ ]     [ ]                  06_reflectionfree_plus_plane
 07    [ ]     [ ]                  07_reference_glass
 08    [ ]     [ ]                  08_frit_pattern_scale
-09    [ ]     [ ]                  09_roller_wave
-10    [ ]     [ ]                  10_object_variation
-11    [ ]     [ ]                  11_texture_decode
+09    [ ]     [ ]                  09_object_variation
+10    [ ]     [ ]                  12_flood_coat_faceid
+11    [ ]     [ ]                  13_metal_pan
 
 Iray for 3ds Max version: ______________
 3ds Max version: ______________
@@ -265,13 +269,17 @@ coating meant for surface #2 would also appear on #1.
   Else                                         -> single coating plane and
     a documented 1-2 point reflectance error on low-e products.
 
-ROLLER WAVE DECISION (tests 09 and 11 together)
------------------------------------------------
-  11 shows banding, 09 ripples       -> the feature works; ship it.
-  11 shows banding, 09 stays flat    -> the texture is fine but
-    material_geometry.normal is dead in this build; the fix is moving the
-    perturbed normal onto the BSDF layers' own normal parameter.
-  11 shows uniform red, no banding   -> Iray cannot decode the shipped
-    PNG; the file format needs changing.
-  11 shows no red at all             -> the texture file was not found;
-    check it sits beside the .mdl.
+SPANDREL (tests 12 and 13)
+--------------------------
+Test 12 gates the volumetric flood-coat export: the painted lite is ONE
+material whose interior face swaps to opaque paint through a bsdf
+conditional on the interior_face parameter. Test 13 gates the metallic
+back-pan finish. Record both before any spandrel ZIP goes to a project.
+
+ROLLER WAVE (not an MDL test anymore)
+-------------------------------------
+material_geometry.normal inside MDL is dead in this build (two field
+failures, 2026-08-27), but the Iray+ material's own Max-side 'geometry
+normal' map channel works (field-confirmed with a Noise map). The roller
+wave therefore ships as a bump map the apply script wires into that
+channel; nothing about it lives in these modules.

@@ -2,7 +2,7 @@ import type { RGB } from "../types/optics";
 import type { GlazingSystemInput, SurfaceNumber } from "../types/system";
 import { SUBSTRATE_INTERNAL_T_6MM, REFERENCE_THICKNESS_M } from "./constants";
 import { luminance, mulRGB, scaleToLuminance, gray } from "./color";
-import { resolveColorSpec } from "./colorimetry";
+import { resolveColorSpec, resolveColorSpecAbsolute } from "./colorimetry";
 import {
   bareInterface,
   fitLiteFaces,
@@ -11,6 +11,7 @@ import {
   slabOptics,
   solveIncreasing,
   stackAll,
+  stackTwo,
   type OpticalInterface,
   type ScalarOptics,
 } from "./slab";
@@ -294,6 +295,27 @@ export function fitAssembly(input: GlazingSystemInput): AssemblyFit {
   };
 }
 
+/** One lite's two interfaces in a fit, for one channel: the fitted coating where it sits, bare glass elsewhere. */
+function liteInterfaces(
+  fit: AssemblyFit,
+  lite: number,
+  c: keyof RGB,
+): { front: OpticalInterface; back: OpticalInterface } {
+  const at = fit.coating?.location;
+  const coatingInterface: OpticalInterface | undefined = fit.coating
+    ? { rExt: fit.coating.rExt[c], rInt: fit.coating.rInt[c], tau: fit.coating.tau[c] }
+    : undefined;
+  const front =
+    at && at.lite === lite && at.face === "front" && coatingInterface
+      ? coatingInterface
+      : bareInterface();
+  const back =
+    at && at.lite === lite && at.face === "back" && coatingInterface
+      ? coatingInterface
+      : bareInterface();
+  return { front, back };
+}
+
 /**
  * Lite-level aggregate optics of one lite in a fit: its two interfaces (the
  * fitted coating where it sits, bare glass elsewhere) around the fitted body.
@@ -303,21 +325,10 @@ export function liteAggregateOptics(
   fit: AssemblyFit,
   lite: number,
 ): { t: RGB; rFront: RGB; rBack: RGB } {
-  const at = fit.coating?.location;
   const channels = ["r", "g", "b"] as const;
 
   const per = channels.map((c) => {
-    const coatingInterface: OpticalInterface | undefined = fit.coating
-      ? { rExt: fit.coating.rExt[c], rInt: fit.coating.rInt[c], tau: fit.coating.tau[c] }
-      : undefined;
-    const front =
-      at && at.lite === lite && at.face === "front" && coatingInterface
-        ? coatingInterface
-        : bareInterface();
-    const back =
-      at && at.lite === lite && at.face === "back" && coatingInterface
-        ? coatingInterface
-        : bareInterface();
+    const { front, back } = liteInterfaces(fit, lite, c);
     return slabOptics(fit.internalT[lite][c], front, back);
   });
 
@@ -325,6 +336,73 @@ export function liteAggregateOptics(
     t: { r: per[0].t, g: per[1].t, b: per[2].t },
     rFront: { r: per[0].rFront, g: per[1].rFront, b: per[2].rFront },
     rBack: { r: per[0].rBack, g: per[1].rBack, b: per[2].rBack },
+  };
+}
+
+export interface SpandrelAppearance {
+  /** What the opaque panel reflects toward the exterior, per channel. */
+  readsAs: RGB;
+  /** The same stack with a black finish: the glass's own reflection. */
+  glassOnly: RGB;
+  /** The finish albedo, level and hue both taken from the colour spec. */
+  finish: RGB;
+}
+
+/** Default when no colour has been chosen yet: a dark neutral. */
+export const DEFAULT_FINISH_ALBEDO: RGB = { r: 0.05, g: 0.05, b: 0.05 };
+
+/**
+ * Forward appearance of a spandrel: the fitted glass, unchanged, with the
+ * finish behind it. There is nothing to solve — no data sheet measures a
+ * spandrel — so the finish colour is applied at face value and the result is
+ * reported, which is the number the panel has to be judged against in a
+ * render: the finish seen through this glass, not the finish on its own.
+ *
+ * A flood coat replaces the painted lite's back interface with an opaque
+ * reflector (nothing transmits, nothing reflects from the far side); lites
+ * behind it are hidden and dropped. A back pan is an opaque element after
+ * the whole glass stack, the cavity being optically empty.
+ */
+export function spandrelAppearance(
+  fit: AssemblyFit,
+  input: GlazingSystemInput,
+): SpandrelAppearance | undefined {
+  const spandrel = input.spandrel;
+  if (!spandrel) return undefined;
+
+  const finish = resolveColorSpecAbsolute(spandrel.color, DEFAULT_FINISH_ALBEDO);
+  const channels = ["r", "g", "b"] as const;
+
+  const exteriorReflectance = (c: keyof RGB, rho: number): number => {
+    if (spandrel.kind === "flood-coat") {
+      const painted = Math.min(locateSurface(spandrel.surface).lite, input.lites.length - 1);
+      const elements = input.lites.slice(0, painted + 1).map((_, i) => {
+        const { front, back } = liteInterfaces(fit, i, c);
+        const paint: OpticalInterface = { rExt: rho, rInt: 0, tau: 0 };
+        return slabOptics(fit.internalT[i][c], front, i === painted ? paint : back);
+      });
+      return stackAll(elements).rFront;
+    }
+    const glass = stackAll(
+      input.lites.map((_, i) => {
+        const { front, back } = liteInterfaces(fit, i, c);
+        return slabOptics(fit.internalT[i][c], front, back);
+      }),
+    );
+    return stackTwo(glass, { t: 0, rFront: rho, rBack: 0 }).rFront;
+  };
+
+  const pick = (rho: (c: keyof RGB) => number): RGB => ({
+    r: exteriorReflectance("r", rho("r")),
+    g: exteriorReflectance("g", rho("g")),
+    b: exteriorReflectance("b", rho("b")),
+  });
+  void channels;
+
+  return {
+    readsAs: pick((c) => finish[c]),
+    glassOnly: pick(() => 0),
+    finish,
   };
 }
 

@@ -1,0 +1,45 @@
+mdl 1.6;
+
+import ::anno::*;
+import ::df::*;
+
+// Does a bsdf conditional on interior_face put paint on one face of a solid?
+//
+// Setup: The Material-ID box (ID 1 exterior, ID 2 the opposite face, ID 3
+// edges). Assign this ONE material to all three slots of a
+// Multi-Sub-Object, with interior_face OFF in slots 1 and 3 and ON in slot
+// 2. View the box from the ID 1 side, then from the ID 2 side.
+//
+// Expected: From the ID 1 side: clear glass with a faint Fresnel reflection
+// over a RED interior — the paint seen through 6mm of glass, slightly
+// darkened. From the ID 2 side: flat matte RED, no glassiness, nothing
+// transmitted. If the ID 1 side shows red paint AT the surface (no glass
+// depth, no reflection), the conditional collapsed to the diffuse branch
+// and flood coats need a second material per face instead. If the ID 2 side
+// shows glass, the conditional was ignored.
+
+// Flood coat structure: `interior_face ? diffuse(RED) : glass`.
+// One material, three slots; only slot 2 turns the parameter on.
+
+export material test12_flood_coat(
+    uniform bool interior_face = false
+        [[
+            anno::display_name("Interior face"),
+            anno::description("Off for Material IDs 1 and 3, on for ID 2.")
+        ]]
+)
+[[
+    anno::display_name("12 flood coat via interior_face"),
+    anno::description("12 flood coat via interior_face"),
+    anno::author("glass2mdl 0.1.0")
+]]
+= material(
+    thin_walled: false,
+    surface: material_surface(
+        scattering: interior_face ? df::diffuse_reflection_bsdf(tint: color(0.9, 0.1, 0.1)) : df::specular_bsdf(tint: color(1.0, 1.0, 1.0), mode: df::scatter_reflect_transmit)
+    ),
+    ior: color(1.52),
+    volume: material_volume(
+        absorption_coefficient: color(7.15125, 7.15125, 7.15125)
+    )
+);

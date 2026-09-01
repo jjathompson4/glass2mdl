@@ -44,8 +44,20 @@ export type LayerIR =
       opacity: number;
       weight: FritWeightSource;
     }
-  /** Diffuse-only opaque surface (spandrel/back-painted; reserved for P5). */
-  | { kind: "diffuse"; color: RGB };
+  /** Diffuse-only opaque surface: a flood coat, or a painted back pan. */
+  | {
+      kind: "diffuse";
+      color: RGB;
+      /**
+       * Solids only: the layer replaces the whole stack on the face whose
+       * Material ID turns `interior_face` on, and is absent on the others.
+       * This is how a flood coat lands on surface #4 alone. The material
+       * must declare the `interior_face` parameter.
+       */
+      interiorFaceOnly?: true;
+    }
+  /** Glossy metal: a metallic-finish back pan. Roughness 0 = mirror. */
+  | { kind: "metal"; color: RGB; roughness: number };
 
 /** Module-level MDL functions a material references. */
 export type ModuleFunctionIR =

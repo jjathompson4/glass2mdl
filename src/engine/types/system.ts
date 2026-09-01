@@ -1,3 +1,4 @@
+import type { ColorSpec } from "./color";
 import type { AssemblyOptics, Fraction, Millimeters, RGB } from "./optics";
 
 /**
@@ -81,6 +82,35 @@ export interface RollerWaveInput {
   depth: "subtle" | "typical" | "strong";
 }
 
+export type SpandrelFinish = "matte" | "metallic";
+
+/**
+ * What makes a glazing build-up a spandrel: an opaque finish the manufacturer
+ * offers, behind glass chosen from an ordinary glazing data sheet. There is no
+ * spandrel data sheet, so the finish colour is taken as given — the one place
+ * a colour sets level as well as hue — and the tool reports what the panel
+ * reads as from outside once that colour sits behind the fitted glass.
+ */
+export type SpandrelInput =
+  /** Opaque paint fused to the back of a lite: typically #4 on a double unit. */
+  | {
+      kind: "flood-coat";
+      /** Must be a back face (an even-numbered surface). */
+      surface: SurfaceNumber;
+      color: ColorSpec;
+      /** Where the colour came from: "RAL 7024", a Kynar name, "sample photo". */
+      colorLabel?: string;
+    }
+  /** Shadow box: the glass stays glass; a metal pan sits behind an air cavity. */
+  | {
+      kind: "back-pan";
+      /** Air gap between the innermost lite and the pan face. */
+      cavity: Millimeters;
+      color: ColorSpec;
+      colorLabel?: string;
+      finish: SpandrelFinish;
+    };
+
 export interface GlazingSystemInput {
   /** User label; sanitized into MDL identifiers and file names. */
   name: string;
@@ -92,6 +122,8 @@ export interface GlazingSystemInput {
   frit?: FritInput;
   /** Present = roller wave enabled for every lite. */
   rollerWave?: RollerWaveInput;
+  /** Present = this build-up is a spandrel; excludes frit. */
+  spandrel?: SpandrelInput;
 }
 
 /**

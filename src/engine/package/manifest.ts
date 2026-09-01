@@ -87,12 +87,28 @@ export function buildBindManifest(
     };
   }
 
+  const types: Record<string, unknown> = { [prefix]: typeEntry };
+
+  // A back pan is a second product type: the tagger gives a pan whatever lite
+  // position its geometry earns (or none), so `_default` binds it regardless.
+  // No roller wave on a pan: the ripple belongs to heat-treated glass.
+  if (input.spandrel?.kind === "back-pan") {
+    const pan = materials.find((m) => m.name === `${prefix}_pan`);
+    if (pan) {
+      types[`${prefix}_pan`] = {
+        by_position: { _default: materialSpec(pkg, pan) },
+        roller_wave: false,
+        note: "Back pan. In the apply script: choose this type, select the pans, Mark selection as this type, Assign.",
+      };
+    }
+  }
+
   const manifest: Record<string, unknown> = {
     format: "glass2mdl-bind-manifest",
     version: 1,
     module: names.module,
     note: "type_name values assume the export folder sits directly on an Iray+ MDL search path. Lite position keys match the apply script's g2m_position stamps. The module filename carries a content revision, so re-exports never collide with modules 3ds Max has already cached.",
-    types: { [prefix]: typeEntry },
+    types,
   };
 
   // The ripple is Max-side texturing, not MDL: the apply script wires this
