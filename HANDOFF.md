@@ -86,7 +86,13 @@ painted lite (new emitter structure — **kit test 12 gates it**); a pan is
 13**). UI: third feature card "Spandrel finish", diagram tag / pan bar,
 reads-as swatches. Max script: `tag_as_pan()` + GUI button, pans skip the
 ripple and the UV map, `MIN_LITE_THICKNESS_MM` knob (off) for pans read as
-lites. Merge to `main` (= production) only after kit 12/13 render on the
+lites. **First field run (Jeff, same evening, preview deploy):** the split
+worked, the pan tagged as a third lite (it is a thin solid; Tag-step
+checkbox "innermost sheet is the back pan" now strips it), and Tag + color
+check repainted the bound vision lites (`qa()` now scopes to what was just
+tagged, like Assign). Window tidied: section 0 practice scene, Shell
+details in the extras row, scene scan removed from the window (listener
+only). Merge to `main` (= production) only after kit 12/13 render on the
 workstation and the two-ZIP field check on the GL31X model; the open loops
 (Debug shells on a spandrel panel, cavity depth, planar pan surfaces, the
 owed TGU render) are listed at the end of `docs/spandrel-plan.md`.

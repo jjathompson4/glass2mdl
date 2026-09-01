@@ -64,13 +64,18 @@ mutually exclusive.
    opaque terminal bar for the pan; condensed-bar pill; colour panel shows
    "Spandrel, seen from outside" (`readsAs`) and marks looking-through as
    opaque; ghost card n-of-3.
-2. **Max apply script**: pans that fail the lite test cannot be tagged today
-   → a "Tag selection as pan" path (stamps tagged/type/position without face
-   IDs). Honour the manifest's `roller_wave: false`. A pan modelled as a thin
-   solid sheet passes `_pair_sheets` as a lite and would turn a DGU spandrel
-   into outer/center/inner — decide a minimum sheet thickness screen after
-   the workstation check (W1 below). `bind()` already leaves foreign products
-   and unknown positions alone (2026-09-01 fix).
+2. **Max apply script** — done 2026-09-01 evening after the first field run:
+   `tag_as_pan()` (+ "Tag selection as back pan" button) for pans the lite
+   test rejects; the manifest's `roller_wave: false` honoured; and, because
+   the GL31X pans ARE thin solids that pass the lite test (W1 answered: the
+   dual-glazed spandrel tagged outer/center/inner), a Tag-step checkbox
+   "the innermost sheet of each stack is the metal back pan" that strips
+   the last sheet off every stack of 2+ (`_strip_pans`). Geometry cannot
+   tell metal from glass; the user can. `MIN_LITE_THICKNESS_MM` stays as a
+   listener knob, off. Also field-hit: Tag + color check repainted the
+   already-bound vision lites — `qa()` now scopes to what Tag just stamped
+   (or the selection), like Assign. `bind()` leaves foreign products and
+   unknown positions alone.
 3. **Kit renders 12 and 13** on the workstation before any spandrel ZIP goes
    to a project (render gate). Then the field model: vision lites bound,
    select spandrels, Assign the spandrel ZIP, confirm no clobbering, render.
@@ -78,9 +83,10 @@ mutually exclusive.
 
 ## Open loops (away from the desk)
 
-Workstation: **W1** Debug shells on one spandrel panel (lites found: 2 or 3;
-the pan shell's verdict and thickness; does the inner lite exist as glass).
-**W2** cavity depth glass→pan (grouping threshold is 150mm). **W3** on
+Workstation: **W1 answered 2026-09-01**: the pan is a thin solid that passes
+the lite test (3 lites found); fixed by the Tag-step checkbox, not a
+thickness floor. **W2** cavity depth glass→pan (grouping threshold is
+150mm; the pan grouped into the IGU, so it is under that). **W3** on
 planar-modelled facades, is there a pan surface to assign to? **W4** the TGU
 split's Iray render is still owed; confirm before the two-ZIP field check.
 **W5** kit renders 12 and 13.

@@ -589,6 +589,24 @@ def _group_igus(records, axial_gap, lateral_factor):
     return groups
 
 
+def _strip_pans(groups):
+    """Shadow-box spandrels: the innermost sheet of every multi-sheet stack is
+    the metal back pan, not glass. Field-hit 2026-09-01 on the GL31X model:
+    Revit exports the dual-glazed spandrel with its pan as one object, the
+    pan is a thin solid that passes the lite test, and the stack tagged as
+    outer/center/inner. Geometry alone cannot tell metal from glass, so the
+    user says so (the Tag step's checkbox) and this pulls the last member off
+    each group of 2+. Groups must already be sorted exterior -> interior.
+    Returns (groups, pans)."""
+    kept, pans = [], []
+    for group in groups:
+        if len(group) >= 2:
+            pans.append(group[-1])
+            group = group[:-1]
+        kept.append(group)
+    return kept, pans
+
+
 def _pick_exterior(groups):
     """Orient each IGU's axis toward 'outside'. Centroid heuristic; degrades
     to a globally consistent side (for flat single facades) with a warning."""
@@ -856,9 +874,16 @@ def _split_stack(obj, plane_tol, max_thickness, min_extent, convert,
 
 
 def tag(pattern=None, convert=True, plane_tol_mm=1.0, max_thickness_mm=60.0,
-        axial_gap_mm=150.0, lateral_factor=0.35, min_pane_mm=200.0):
+        axial_gap_mm=150.0, lateral_factor=0.35, min_pane_mm=200.0,
+        pan_behind=False):
     """Tag lites in the selection (or matching a name/layer pattern) with the
     ID 1/2/3 convention, and group them into IGUs stored as user properties.
+
+    pan_behind=True is for shadow-box spandrels: the innermost sheet of each
+    stack of 2+ is the metal back pan and is tagged as a pan (no face IDs,
+    no lite position) instead of a lite, so a dual-glazed spandrel with its
+    pan comes out outer/inner + pan rather than outer/center/inner. A stack
+    of one is left as a lite: nothing says which it is.
 
     Face IDs live on Editable Poly/Mesh, so anything else in the selection is
     collapsed first (convert=True, the default; undoable). Pass convert=False
@@ -874,11 +899,11 @@ def tag(pattern=None, convert=True, plane_tol_mm=1.0, max_thickness_mm=60.0,
     """
     if rt is None:
         print("Run inside 3ds Max.")
-        return
+        return []
     objs = _candidates(pattern)
     if not objs:
         print("Nothing to tag. Select objects or pass a pattern like '*glass*'.")
-        return
+        return []
 
     plane_tol = _mm(plane_tol_mm)
     max_thickness = _mm(max_thickness_mm)
@@ -923,12 +948,23 @@ def tag(pattern=None, convert=True, plane_tol_mm=1.0, max_thickness_mm=60.0,
                   " test.")
             for name, why in skipped:
                 print("  skipped %s: %s" % (name, why))
-            return
+            return []
 
         groups = _pick_exterior(_group_igus(records, axial_gap, lateral_factor))
+        for group in groups:
+            group.sort(key=lambda r: _dot(r["center"], r["ext_axis"]), reverse=True)
+
+        pans, lone = [], 0
+        if pan_behind:
+            lone = sum(1 for g in groups if len(g) < 2)
+            groups, pans = _strip_pans(groups)
+            for rec in pans:
+                obj = rec["obj"]
+                rt.setUserProp(obj, PROP_TAGGED, "1")
+                rt.setUserProp(obj, PROP_IGU, POSITION_PAN)
+                rt.setUserProp(obj, PROP_POSITION, POSITION_PAN)
 
         for igu_idx, group in enumerate(groups):
-            group.sort(key=lambda r: _dot(r["center"], r["ext_axis"]), reverse=True)
             names = lite_position_names(len(group))
             for rec, position in zip(group, names):
                 ext = rec["ext_axis"]
@@ -944,13 +980,21 @@ def tag(pattern=None, convert=True, plane_tol_mm=1.0, max_thickness_mm=60.0,
                 rt.setUserProp(obj, PROP_IGU, str(igu_idx))
                 rt.setUserProp(obj, PROP_POSITION, position)
 
-    print("g2m: tagged %d lites in %d IGUs; skipped %d%s%s."
-          % (len(records), len(groups), len(skipped),
+    print("g2m: tagged %d lites in %d IGUs; skipped %d%s%s%s."
+          % (len(records) - len(pans), len(groups), len(skipped),
+             "; %d back pans (innermost sheet of each stack)" % len(pans) if pans else "",
              "; split %d combined objects into per-lite objects (undoable)"
              % split if split else "",
              "; collapsed %d to Editable Poly (undoable)" % converted if converted else ""))
+    if pan_behind and lone:
+        print("  %d stack(s) had a single sheet, left as a lite: nothing says"
+              " whether it is glass or the pan. Use 'Tag selection as back"
+              " pan' on the pans by hand." % lone)
     for name, why in skipped:
         print("  skipped %s: %s" % (name, why))
+    # Everything this call stamped, split pieces included, so the color
+    # check that follows can stay on exactly these objects.
+    return [rec["obj"] for rec in records]
 
 
 class _UndoBlock:
@@ -982,22 +1026,34 @@ def _diag_material(name, rgb):
     return m
 
 
-def qa():
-    """Assign the red/blue/green diagnostic Multi-Sub to every tagged lite.
-    Orbit the model: exterior must read green everywhere."""
+def qa(objects=None):
+    """Assign the red/blue/green diagnostic Multi-Sub to tagged lites.
+    Orbit the model: exterior must read green everywhere.
+
+    Scope follows the same rule as Assign: the tagged lites in `objects`
+    (the GUI passes what Tag just stamped), else the viewport selection,
+    else everything tagged. Field lesson 2026-09-01: checking a spandrel
+    selection used to repaint the vision lites bound an hour earlier."""
     if rt is None:
         print("Run inside 3ds Max.")
         return
+    if objects is None:
+        sel = list(rt.selection)
+        scope = "selection" if sel else "everything tagged"
+        objects = [o for o in _tagged_objects() if not sel or _is_selected(o)]
+    else:
+        scope = "just tagged"
     mm = rt.MultiMaterial(numsubs=3)
     mm.name = "g2m_QA"
     for mat_id, (label, rgb) in QA_COLORS.items():
         mm.materialList[mat_id - 1] = _diag_material("g2m_QA_%s" % label, rgb)
         mm.names[mat_id - 1] = label
-    tagged = [o for o in _tagged_objects() if not _is_pan(o)]
+    tagged = [o for o in objects if not _is_pan(o)]
     for obj in tagged:
         obj.material = mm
-    print("g2m: QA material on %d objects. Green out, red in, blue edges."
-          % len(tagged))
+    print("g2m: QA material on %d objects (%s). Green out, red in, blue"
+          " edges. Lites bound earlier keep their materials unless they are"
+          " in scope." % (len(tagged), scope))
 
 
 def _flip_igu(members):
@@ -1552,6 +1608,11 @@ def bind(type_map=None, material_factory=None, add_uv=True, objects=None):
         print("g2m: left %d lites alone: typed '%s', which is another product"
               " this manifest does not carry." % (n, pfx))
     for (pfx, pos), n in sorted(unbound.items()):
+        if pos == POSITION_PAN:
+            print("g2m: left %d back pans alone: '%s' ships no pan material"
+                  " (a flood-coated spandrel hides its pan; a shadow box"
+                  " exports a '%s_pan' type)." % (n, pfx, pfx))
+            continue
         print("g2m: left %d lites alone: '%s' has no material for the '%s'"
               " lite position. Check the tagging, or re-export with the"
               " matching lite count." % (n, pfx, pos))
@@ -1919,6 +1980,18 @@ def show_gui():
         root.addWidget(box)
         return lay
 
+    # 0 - Optional practice scene
+    lay0 = group("0 · Try it without a model (optional)",
+                 "Skip this if your glazing geometry is already in the scene. "
+                 "It drops a few synthetic IGU boxes to practise the steps "
+                 "below on.")
+    row0 = QtWidgets.QHBoxLayout()
+    btn_test = QtWidgets.QPushButton("Build test scene")
+    row0.addWidget(btn_test)
+    row0.addStretch(1)
+    lay0.addLayout(row0)
+    btn_test.clicked.connect(lambda: run(build_test_scene))
+
     # 1 - Select
     lay1 = group("1 · Select the glazing",
                  "In the viewport, select the glazing solids you want to "
@@ -1927,19 +2000,10 @@ def show_gui():
                  "then check them here. Nothing is modified by the check.")
     row1 = QtWidgets.QHBoxLayout()
     btn_check = QtWidgets.QPushButton("Check my selection")
-    btn_shells = QtWidgets.QPushButton("Shell details")
-    btn_scan = QtWidgets.QPushButton("Find candidates for me")
-    btn_test = QtWidgets.QPushButton("Build test scene")
     row1.addWidget(btn_check)
-    row1.addWidget(btn_shells)
-    row1.addWidget(btn_scan)
-    row1.addWidget(btn_test)
     row1.addStretch(1)
     lay1.addLayout(row1)
     btn_check.clicked.connect(lambda: run(check_selection, redraw=False))
-    btn_shells.clicked.connect(lambda: run(debug_shells, redraw=False))
-    btn_scan.clicked.connect(lambda: run(find_glazing))
-    btn_test.clicked.connect(lambda: run(build_test_scene))
 
     # 2 - Tag + check
     lay2 = group("2 · Tag faces + color check",
@@ -1951,6 +2015,15 @@ def show_gui():
         "Collapse to Editable Poly when needed (undoable; required for face IDs)")
     chk_convert.setChecked(True)
     lay2.addWidget(chk_convert)
+    chk_pan = QtWidgets.QCheckBox(
+        "Spandrel shadow box: the innermost sheet of each stack is the metal "
+        "back pan (tag it as a pan, not a lite)")
+    chk_pan.setToolTip(
+        "Revit exports a spandrel with its pan as one object, and the pan is "
+        "a thin solid that passes the lite test. Tick this for spandrel "
+        "selections so a dual-glazed unit tags as outer/inner + pan instead "
+        "of outer/center/inner. Leave it off for vision glazing.")
+    lay2.addWidget(chk_pan)
     row2 = QtWidgets.QHBoxLayout()
     btn_tag = QtWidgets.QPushButton("Tag + color check")
     btn_flip = QtWidgets.QPushButton("Flip selected")
@@ -1970,8 +2043,9 @@ def show_gui():
     btn_pan.clicked.connect(lambda: run(tag_as_pan, redraw=False))
 
     def do_tag():
-        tag(convert=chk_convert.isChecked())
-        qa()
+        nodes = tag(convert=chk_convert.isChecked(), pan_behind=chk_pan.isChecked())
+        if nodes:
+            qa(objects=nodes)
     btn_tag.clicked.connect(lambda: run(do_tag))
     btn_flip.clicked.connect(lambda: run(flip_selected))
     btn_flip_all.clicked.connect(lambda: run(flip_all))
@@ -2120,14 +2194,21 @@ def show_gui():
     # Extras + log
     row4 = QtWidgets.QHBoxLayout()
     btn_report = QtWidgets.QPushButton("Report")
+    btn_shells = QtWidgets.QPushButton("Shell details")
+    btn_shells.setToolTip(
+        "Explains, shell by shell, why the last check or tag accepted or "
+        "rejected each piece of the selection, with the numbers. Run it "
+        "when a result surprises you.")
     btn_untag = QtWidgets.QPushButton("Untag selected")
     btn_clear = QtWidgets.QPushButton("Clear tags")
     row4.addWidget(btn_report)
+    row4.addWidget(btn_shells)
     row4.addWidget(btn_untag)
     row4.addWidget(btn_clear)
     row4.addStretch(1)
     root.addLayout(row4)
     btn_report.clicked.connect(lambda: run(report, redraw=False))
+    btn_shells.clicked.connect(lambda: run(debug_shells, redraw=False))
     btn_untag.clicked.connect(lambda: run(untag_selected, redraw=False))
     btn_clear.clicked.connect(lambda: run(clear_tags))
 
