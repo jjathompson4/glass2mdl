@@ -617,6 +617,13 @@ def _tagged_objects():
     return out
 
 
+def _is_selected(obj):
+    try:
+        return bool(obj.isSelected)
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def _candidates(pattern):
     if pattern:
         hits = []
@@ -1317,6 +1324,9 @@ def make_iray_mdl_factory(manifest):
             enable_emission=bool(spec.get("enable_emission", False)),
             name="g2m_%s_%s_%s" % (prefix, position, slot),
         )
+    # bind() leaves lites typed for any OTHER product alone instead of
+    # handing them an empty Multi-Sub.
+    factory.known_prefixes = set(manifest)
     return factory
 
 
@@ -1419,7 +1429,7 @@ def _ensure_uv(obj):
     return True
 
 
-def bind(type_map=None, material_factory=None, add_uv=True):
+def bind(type_map=None, material_factory=None, add_uv=True, objects=None):
     """Build one Multi-Sub per (glazing type, lite position) and assign it.
 
     The glazing type of each lite resolves in order:
@@ -1428,7 +1438,13 @@ def bind(type_map=None, material_factory=None, add_uv=True):
          e.g. {"*curtain*": "v5227_dgu"} — the option for models whose names
          or layers identify the type.
     Either alone is enough; lites resolving to no type are left untouched and
-    counted as unmatched.
+    counted as unmatched. Lites typed for a product the factory cannot build
+    (a vision type while assigning a spandrel manifest, say) are left alone
+    too — never handed an empty Multi-Sub — as are positions the manifest
+    has no material for.
+
+    objects limits the pass to those tagged objects (the GUI passes the
+    viewport selection); None means every tagged object in the scene.
 
     material_factory(prefix, position, slot) -> material or None, where slot
     is one of "exterior"/"interior"/"edge". The Iray+ MDL discovery run
@@ -1445,13 +1461,14 @@ def bind(type_map=None, material_factory=None, add_uv=True):
     if rt is None:
         print("Run inside 3ds Max.")
         return
-    multis = {}
+    multis, foreign, unbound = {}, {}, {}
     bound = unmatched = uv_mapped = 0
     # One shared bitmap: every lite material gets the same map node, and the
     # per-object UV offsets below are what keep the ripple varied.
     roller_bmp, _roller_mult = _roller_wave_bitmap() if material_factory else (None, 1.0)
     roller_wired = 0
-    for obj in _tagged_objects():
+    known = getattr(material_factory, "known_prefixes", None)
+    for obj in (_tagged_objects() if objects is None else objects):
         stamped = rt.getUserProp(obj, PROP_TYPE)
         prefix = str(stamped) if stamped not in (None, "", "undefined") else None
         if prefix is None and type_map:
@@ -1468,14 +1485,28 @@ def bind(type_map=None, material_factory=None, add_uv=True):
         if prefix is None:
             unmatched += 1
             continue
+        if known is not None and prefix not in known:
+            foreign[prefix] = foreign.get(prefix, 0) + 1
+            continue
         position = str(rt.getUserProp(obj, PROP_POSITION))
         key = (prefix, position)
+        if key in unbound:
+            unbound[key] += 1
+            continue
         if key not in multis:
+            slots = ("exterior", "interior", "edge")
+            mats = [material_factory(prefix, position, slot) if material_factory else None
+                    for slot in slots]
+            if material_factory is not None and all(m is None for m in mats):
+                # The manifest knows the product but has nothing for this lite
+                # position (a double-glazed export on a scene tagged as
+                # triple, say). An empty Multi-Sub would blank the object.
+                unbound[key] = 1
+                continue
             mm = rt.MultiMaterial(numsubs=3)
             mm.name = "g2m_%s_%s" % (prefix, position)
-            for i, slot in enumerate(("exterior", "interior", "edge")):
+            for i, (slot, mat) in enumerate(zip(slots, mats)):
                 mm.names[i] = "%s face (ID%d)" % (slot, i + 1)
-                mat = material_factory(prefix, position, slot) if material_factory else None
                 mm.materialList[i] = mat
                 if mat is not None and roller_bmp is not None:
                     if _wire_roller_wave(mat, roller_bmp):
@@ -1487,6 +1518,13 @@ def bind(type_map=None, material_factory=None, add_uv=True):
         bound += 1
     print("g2m: assigned %d objects to %d Multi-Sub materials; %d unmatched."
           % (bound, len(multis), unmatched))
+    for pfx, n in sorted(foreign.items()):
+        print("g2m: left %d lites alone: typed '%s', which is another product"
+              " this manifest does not carry." % (n, pfx))
+    for (pfx, pos), n in sorted(unbound.items()):
+        print("g2m: left %d lites alone: '%s' has no material for the '%s'"
+              " lite position. Check the tagging, or re-export with the"
+              " matching lite count." % (n, pfx, pos))
     if add_uv:
         print("g2m: UV mapped %d lites (1m box map + per-object offset, so the"
               " roller wave varies lite to lite)." % uv_mapped)
@@ -1926,7 +1964,8 @@ def show_gui():
             print("g2m: manifest loaded; %d glazing type(s): %s"
                   % (len(keys), ", ".join(keys)))
             if not multi:
-                print("  One type only: Assign materials applies it to everything tagged.")
+                print("  One type only: Assign materials applies it to the selection,"
+                      " or to everything tagged when nothing is selected.")
             print("  Export folder: %s" % export_dir)
             print("  Its parent must be an Iray+ MDL search path: %s"
                   % os.path.dirname(export_dir))
@@ -1948,13 +1987,26 @@ def show_gui():
             cur = rt.getUserProp(obj, PROP_TYPE)
             return str(cur) if cur not in (None, "", "undefined") else None
 
+        # A viewport selection scopes Assign to the tagged lites in it, so a
+        # second product (the spandrel ZIP after the vision ZIP) reaches only
+        # the lites it is for. Nothing selected: everything tagged, as before.
+        targets = _tagged_objects()
+        if list(rt.selection):
+            targets = [o for o in targets if _is_selected(o)]
+            if not targets:
+                print("g2m: nothing in the selection is tagged. Tag it first,"
+                      " or clear the selection to assign to everything tagged.")
+                return
+            print("g2m: assigning to the %d tagged lites in the selection."
+                  % len(targets))
+
         if len(keys) == 1:
             # One type in the manifest: Assign means "apply THIS product to
-            # everything tagged". Type stamps from an earlier product are
-            # stale state, not intent — overwrite them, and say so.
+            # the lites in scope". Type stamps from an earlier product are
+            # stale state there, not intent — overwrite them, and say so.
             only = next(iter(keys))
             stamped = restamped = 0
-            for obj in _tagged_objects():
+            for obj in targets:
                 cur = current_type(obj)
                 if cur == only:
                     continue
@@ -1972,7 +2024,7 @@ def show_gui():
             # Several types: stamps are meaningful, but a stamp this manifest
             # doesn't know would bind nothing — say which and how to fix it.
             strays = {}
-            for obj in _tagged_objects():
+            for obj in targets:
                 cur = current_type(obj)
                 if cur is not None and cur not in keys:
                     strays[cur] = strays.get(cur, 0) + 1
@@ -1980,7 +2032,7 @@ def show_gui():
                 print("g2m: %d lites are typed '%s', which this manifest does"
                       " not offer; left alone. Select them and Mark as one"
                       " of: %s" % (n, t, ", ".join(sorted(keys))))
-        bind(material_factory=make_iray_mdl_factory(manifest))
+        bind(material_factory=make_iray_mdl_factory(manifest), objects=targets)
     btn_bind.clicked.connect(lambda: run(do_bind))
 
     # Extras + log

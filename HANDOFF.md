@@ -56,6 +56,17 @@ changes, all live on `main` (workstation validation of the split still owed):
   the script file's own bytes — a stale copy cost a test cycle because it was
   indistinguishable from a fresh one. Which version a screenshot shows is now
   a fact.
+- **Two products in one scene (2026-09-01, not yet field-tested):** `bind()`
+  used to hand an EMPTY Multi-Sub to every tagged lite whose type the
+  manifest did not carry (the factory returned None per slot, the material
+  was assigned anyway), so assigning a second product's ZIP blanked the
+  first product's lites — the multi-type "left alone" message was false.
+  Now: lites typed for another product are skipped and reported, positions
+  the manifest has no material for are skipped and reported, and Assign
+  scopes to the tagged lites in the viewport selection when there is one
+  (nothing selected = everything tagged, as before). Groundwork for
+  spandrel ZIPs coexisting with vision ZIPs; see
+  [`docs/spandrel-plan.md`](docs/spandrel-plan.md).
 
 ---
 
