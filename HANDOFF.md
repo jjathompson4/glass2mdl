@@ -23,6 +23,28 @@ the work queue below:
   reproduced datasheet VLT (0.525 vs 0.53, −0.9%) *and* the reflectance asymmetry
   (gray-floor boost ratio 1.30 vs 1.31, −0.8%). This is the emitter's target.
 
+**Update 2026-09-01 (TGU facade field test).** A real Revit-imported facade
+(GL31X triple-glazed vision panels) broke the apply script and drove three
+changes, all live on `main` (workstation validation of the split still owed):
+- **Combined multi-lite objects split at tag()** — those panels import as ONE
+  mesh carrying three solid lites plus metal framing, which the single-lite
+  test can never read ("two largest face groups are not opposite", plus a
+  ZeroDivisionError when everything was skipped — both field-hit). tag() now
+  partitions failing objects into disconnected shells, detaches lite-passing
+  shells into per-lite objects (undoable), and leaves framing behind: hollow
+  frame caps rejected by a bounding-fill test, setting blocks by min_pane_mm.
+  A stack of 2+ lites outranks a single-lite pass (equal-area faces can tie
+  into a false pass of the whole panel as one thin lite). Verified on
+  synthetic reproductions of both failure modes; the combined-mesh open item
+  in [`docs/max-apply-workflow.md`](docs/max-apply-workflow.md) is closed.
+- **Safety helpers**: `untag_selected()` (undo one bad tag without
+  clear_tags() nuking the scene) and `debug_shells()` (read-only per-shell
+  verdicts with the numbers), both as GUI buttons.
+- **Script revision stamp**: the window title and log print an FNV-1a hash of
+  the script file's own bytes — a stale copy cost a test cycle because it was
+  indistinguishable from a fresh one. Which version a screenshot shows is now
+  a fact.
+
 ---
 
 ## The former blocker — resolved 2026-08-23/24
@@ -184,7 +206,7 @@ so frit stays UV-based and coverage % is the spec.
 | **GPU render infra** | API-first was agreed; infra never chosen. Options were serverless cloud GPU (Modal/RunPod, cents per render) vs. your own NVIDIA hardware behind a tunnel. Contract is already written in `src/engine/renderApi/contract.ts`. |
 | **Observer handling** | 2° vs 10° is captured as metadata only; conversion uses the 2°-based sRGB matrices. Fine for now — the error is below our other approximations — but revisit if colour accuracy ever gets tightened. |
 | **Git / hosting** | **Committed and pushed 2026-08-25** to the private repo github.com/jjathompson4/glass2mdl (repo name doesn't lock the product name; GitHub renames redirect). CI workflow runs on push; the `mdl-compile-check` job stays reserved (`if: false`) until the render service lands. |
-| **Vercel deploy** | Never deployed. |
+| **Vercel deploy** | **Git-integrated 2026-09-01**: the Vercel project is connected to the repo with production branch `main`, so every push to `main` deploys glass2mdl.com — from any session, cloud included. Before this, deploys were manual from the laptop only, and the site served a stale apply script during the TGU field test while `main` was already fixed. |
 
 ---
 
