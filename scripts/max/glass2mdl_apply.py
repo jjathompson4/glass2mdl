@@ -597,10 +597,13 @@ def _strip_pans(groups):
     outer/center/inner. Geometry alone cannot tell metal from glass, so the
     user says so (the Tag step's checkbox) and this pulls the last member off
     each group of 2+. Groups must already be sorted exterior -> interior.
-    Returns (groups, pans)."""
+    Only groups whose members carry `pan_behind` (set by the checkbox or by
+    the object's name/layer) are touched, so vision and spandrel objects can
+    be tagged in one pass. Returns (groups, pans)."""
     kept, pans = [], []
     for group in groups:
-        if len(group) >= 2:
+        flagged = any(r.get("pan_behind") for r in group)
+        if flagged and len(group) >= 2:
             pans.append(group[-1])
             group = group[:-1]
         kept.append(group)
@@ -683,6 +686,28 @@ def _candidates(pattern):
 GLAZING_NAME_HINTS = ("glass", "glaz", "igu", "vitr", "window", "curtain",
                       "gl-", "gl_", "vision", "spandrel")
 
+# Objects named or layered like a shadow box get their innermost sheet
+# tagged as the metal back pan without the checkbox: on a facade of
+# hundreds of spandrels the name is the only thing that scales. Field
+# basis: Jeff's GL31X model carries "spandrel"/"vision" in object names and
+# Spandrel-Nose/Podium/Tower layers.
+SPANDREL_NAME_HINTS = ("spandrel", "shadow box", "shadowbox", "shadow-box")
+
+
+def _name_and_layer(obj):
+    name = str(obj.name).lower()
+    layer = ""
+    try:
+        layer = str(obj.layer.name).lower()
+    except Exception:  # noqa: BLE001
+        pass
+    return name, layer
+
+
+def _hinted(obj, hints):
+    name, layer = _name_and_layer(obj)
+    return any(h in name or h in layer for h in hints)
+
 
 def find_glazing(max_faces=2000, min_pane_mm=200.0, plane_tol_mm=1.0,
                  max_thickness_mm=60.0, axial_gap_mm=150.0,
@@ -705,13 +730,7 @@ def find_glazing(max_faces=2000, min_pane_mm=200.0, plane_tol_mm=1.0,
     min_pane = _mm(min_pane_mm)
 
     def hinted(obj):
-        name = str(obj.name).lower()
-        layer = ""
-        try:
-            layer = str(obj.layer.name).lower()
-        except Exception:  # noqa: BLE001
-            pass
-        return any(h in name or h in layer for h in GLAZING_NAME_HINTS)
+        return _hinted(obj, GLAZING_NAME_HINTS)
 
     # Every geometry node is probed via a world-space snapshot, whatever its
     # class — imports (Body Objects, linked geometry, live modifier stacks)
@@ -919,6 +938,10 @@ def tag(pattern=None, convert=True, plane_tol_mm=1.0, max_thickness_mm=60.0,
                     converted += 1
                 except Exception:  # noqa: BLE001
                     pass
+            # Pan-behind is decided per SOURCE object: the checkbox for
+            # everything, or the object's own name/layer saying spandrel.
+            hinted_pan = _hinted(obj, SPANDREL_NAME_HINTS)
+            flags = {"pan_behind": pan_behind or hinted_pan, "pan_hinted": hinted_pan}
             rec, why = _analyze_lite(obj, plane_tol, max_thickness)
             # A stack of 2+ lites outranks a single-lite pass — see
             # _split_stack on the equal-area tie that can false-pass a
@@ -928,6 +951,7 @@ def tag(pattern=None, convert=True, plane_tol_mm=1.0, max_thickness_mm=60.0,
                 min_lites=1 if rec is None else 2)
             if pieces is None:
                 if rec is not None:
+                    rec.update(flags)
                     records.append(rec)
                 else:
                     skipped.append((obj.name, split_why or why))
@@ -936,6 +960,7 @@ def tag(pattern=None, convert=True, plane_tol_mm=1.0, max_thickness_mm=60.0,
             for piece in pieces:
                 prec, pwhy = _analyze_lite(piece, plane_tol, max_thickness)
                 if prec is not None:
+                    prec.update(flags)
                     records.append(prec)
                 elif piece is obj:
                     skipped.append((piece.name, "non-lite remainder of the"
@@ -954,15 +979,15 @@ def tag(pattern=None, convert=True, plane_tol_mm=1.0, max_thickness_mm=60.0,
         for group in groups:
             group.sort(key=lambda r: _dot(r["center"], r["ext_axis"]), reverse=True)
 
-        pans, lone = [], 0
-        if pan_behind:
-            lone = sum(1 for g in groups if len(g) < 2)
-            groups, pans = _strip_pans(groups)
-            for rec in pans:
-                obj = rec["obj"]
-                rt.setUserProp(obj, PROP_TAGGED, "1")
-                rt.setUserProp(obj, PROP_IGU, POSITION_PAN)
-                rt.setUserProp(obj, PROP_POSITION, POSITION_PAN)
+        lone = sum(1 for g in groups
+                   if len(g) < 2 and any(r.get("pan_behind") for r in g))
+        groups, pans = _strip_pans(groups)
+        for rec in pans:
+            obj = rec["obj"]
+            rt.setUserProp(obj, PROP_TAGGED, "1")
+            rt.setUserProp(obj, PROP_IGU, POSITION_PAN)
+            rt.setUserProp(obj, PROP_POSITION, POSITION_PAN)
+        by_name = sum(1 for r in pans if r.get("pan_hinted"))
 
         for igu_idx, group in enumerate(groups):
             names = lite_position_names(len(group))
@@ -982,19 +1007,29 @@ def tag(pattern=None, convert=True, plane_tol_mm=1.0, max_thickness_mm=60.0,
 
     print("g2m: tagged %d lites in %d IGUs; skipped %d%s%s%s."
           % (len(records) - len(pans), len(groups), len(skipped),
-             "; %d back pans (innermost sheet of each stack)" % len(pans) if pans else "",
+             "; %d back pans (%d by name/layer, %d by the checkbox)"
+             % (len(pans), by_name, len(pans) - by_name) if pans else "",
              "; split %d combined objects into per-lite objects (undoable)"
              % split if split else "",
              "; collapsed %d to Editable Poly (undoable)" % converted if converted else ""))
-    if pan_behind and lone:
-        print("  %d stack(s) had a single sheet, left as a lite: nothing says"
-              " whether it is glass or the pan. Use 'Tag selection as back"
-              " pan' on the pans by hand." % lone)
+    if lone:
+        print("  %d spandrel stack(s) had a single sheet, left as a lite:"
+              " nothing says whether it is glass or the pan. Use 'Tag"
+              " selection as back pan' on the pans by hand." % lone)
     for name, why in skipped:
         print("  skipped %s: %s" % (name, why))
-    # Everything this call stamped, split pieces included, so the color
-    # check that follows can stay on exactly these objects.
-    return [rec["obj"] for rec in records]
+    # Everything this call stamped, split pieces included: the color check
+    # stays on exactly these, and the viewport selection is replaced by them
+    # so a Mark or Assign right after acts on what was just tagged (the
+    # detached pieces are new nodes that fell out of the old selection).
+    nodes = [rec["obj"] for rec in records]
+    try:
+        rt.select(nodes)
+        print("  Selection now holds exactly what was tagged (%d objects)."
+              % len(nodes))
+    except Exception:  # noqa: BLE001
+        pass
+    return nodes
 
 
 class _UndoBlock:
@@ -1570,10 +1605,16 @@ def bind(type_map=None, material_factory=None, add_uv=True, objects=None):
         if prefix is None:
             unmatched += 1
             continue
+        position = str(rt.getUserProp(obj, PROP_POSITION))
+        # A back pan typed with its product's glass prefix binds through the
+        # product's `_pan` type when the manifest ships one: nobody marks
+        # pans separately.
+        if (position == POSITION_PAN and known is not None
+                and not prefix.endswith("_pan") and prefix + "_pan" in known):
+            prefix = prefix + "_pan"
         if known is not None and prefix not in known:
             foreign[prefix] = foreign.get(prefix, 0) + 1
             continue
-        position = str(rt.getUserProp(obj, PROP_POSITION))
         key = (prefix, position)
         if key in unbound:
             unbound[key] += 1
@@ -1637,6 +1678,121 @@ def bind(type_map=None, material_factory=None, add_uv=True, objects=None):
         for (prefix, position), mm in sorted(multis.items()):
             print("  %s  <- module material '%s_%s' (per-face names arrive "
                   "with the coated-solid emitter)" % (mm.name, prefix, position))
+
+
+def _current_type(obj):
+    cur = rt.getUserProp(obj, PROP_TYPE)
+    return str(cur) if cur not in (None, "", "undefined") else None
+
+
+def _product_keys(manifest):
+    """The manifest's products: every type except a `X_pan` that belongs to
+    an `X` also present (a shadow-box export is one product, two types)."""
+    return sorted(k for k in manifest
+                  if not (k.endswith("_pan") and k[:-4] in manifest))
+
+
+def assign_type_matching(text, prefix):
+    """Stamp `prefix` on every TAGGED object whose name or layer contains
+    `text` (case-insensitive). The facade-scale way to type hundreds of
+    lites at once — "vision" and "spandrel" straight from the Revit names —
+    instead of selecting them. Pans included: bind() routes a pan typed with
+    the glass prefix to the product's `_pan` type by itself."""
+    if rt is None:
+        print("Run inside 3ds Max.")
+        return 0
+    needle = str(text).strip().lower()
+    if not needle:
+        print("g2m: type some text first: objects whose name or layer contains"
+              " it get the type.")
+        return 0
+    hits, retyped = [], 0
+    for obj in _tagged_objects():
+        name, layer = _name_and_layer(obj)
+        if needle in name or needle in layer:
+            cur = _current_type(obj)
+            if cur not in (None, prefix):
+                retyped += 1
+            rt.setUserProp(obj, PROP_TYPE, prefix)
+            hits.append(obj)
+    print("g2m: type '%s' on %d tagged objects whose name or layer contains"
+          " '%s'%s." % (prefix, len(hits), needle,
+                        " (%d re-typed from another product)" % retyped if retyped else ""))
+    if not hits:
+        print("  Nothing tagged matches. Check the spelling against the"
+              " object names or layers, or select them and use Mark"
+              " selection as this type.")
+    return len(hits)
+
+
+def assign_from_manifest(manifest, objects=None):
+    """The GUI's Assign materials: type what needs typing, then bind().
+
+    Scope: `objects` if given, else the tagged objects in the viewport
+    selection, else everything tagged. Within that scope a one-product
+    manifest stamps UNTYPED lites with its product and binds those plus
+    the ones already typed for it. Objects typed for another product are
+    never re-typed here — that silent re-stamp is what used to walk a
+    spandrel ZIP over the vision glass bound an hour earlier — they are
+    counted and left alone; re-typing is an explicit Mark. A multi-product
+    manifest relies on the stamps as before."""
+    if rt is None:
+        print("Run inside 3ds Max.")
+        return
+    if not manifest:
+        print("g2m: choose the bind_manifest.json first.")
+        return
+    if objects is None:
+        targets = _tagged_objects()
+        if list(rt.selection):
+            targets = [o for o in targets if _is_selected(o)]
+            if not targets:
+                print("g2m: nothing in the selection is tagged. Tag it first,"
+                      " or clear the selection to assign to everything tagged.")
+                return
+            print("g2m: assigning within the selection (%d tagged objects)."
+                  % len(targets))
+        else:
+            print("g2m: nothing selected: assigning across everything tagged"
+                  " that is untyped or typed for this product.")
+    else:
+        targets = list(objects)
+
+    products = _product_keys(manifest)
+    keys = set(manifest)
+    if len(products) == 1:
+        only = products[0]
+        own = (only, only + "_pan")
+        stamped, foreign = 0, {}
+        kept = []
+        for obj in targets:
+            cur = _current_type(obj)
+            if cur is None:
+                rt.setUserProp(obj, PROP_TYPE, only)
+                stamped += 1
+                kept.append(obj)
+            elif cur in own:
+                kept.append(obj)
+            else:
+                foreign[cur] = foreign.get(cur, 0) + 1
+        if stamped:
+            print("g2m: typed %d untyped objects as '%s'." % (stamped, only))
+        for t, n in sorted(foreign.items()):
+            print("g2m: left %d objects alone: typed '%s', another product."
+                  " To re-type them, select them and use Mark selection as"
+                  " this type, or Mark matching objects." % (n, t))
+        targets = kept
+    else:
+        strays = {}
+        for obj in targets:
+            cur = _current_type(obj)
+            if cur is not None and cur not in keys:
+                strays[cur] = strays.get(cur, 0) + 1
+        for t, n in sorted(strays.items()):
+            print("g2m: %d objects are typed '%s', which this manifest does"
+                  " not offer; left alone. Mark them as one of: %s"
+                  % (n, t, ", ".join(products)))
+    bind(material_factory=make_iray_mdl_factory(manifest), objects=targets)
 
 
 def report():
@@ -2065,26 +2221,37 @@ def show_gui():
     row3a.addWidget(lbl_manifest, 1)
     lay3.addLayout(row3a)
     lbl_multi = QtWidgets.QLabel(
-        "This manifest carries several types: select each type's objects in "
-        "the viewport and mark them, then Assign materials. A '_pan' type is "
-        "a spandrel back pan: select the pans you tagged as back pans and "
-        "mark them with it.")
+        "Two products in one scene (vision + spandrel) is normal. Type the "
+        "objects first: Mark selection as this type for what is selected, or "
+        "Mark matching for every tagged object whose name or layer contains "
+        "the text (e.g. vision, spandrel). Assign binds the selection, or "
+        "everything tagged when nothing is selected, and never touches "
+        "objects typed for another product. Back pans bind to the product's "
+        "'_pan' type by themselves.")
     lbl_multi.setWordWrap(True)
     lbl_multi.setStyleSheet("color: gray;")
-    lbl_multi.hide()
     lay3.addWidget(lbl_multi)
     row3b = QtWidgets.QHBoxLayout()
     combo_type = QtWidgets.QComboBox()
     combo_type.setMinimumWidth(180)
     btn_stamp = QtWidgets.QPushButton("Mark selection as this type")
     btn_bind = QtWidgets.QPushButton("Assign materials")
-    combo_type.hide()
-    btn_stamp.hide()
     row3b.addWidget(combo_type)
     row3b.addWidget(btn_stamp)
     row3b.addWidget(btn_bind)
     row3b.addStretch(1)
     lay3.addLayout(row3b)
+    row3c = QtWidgets.QHBoxLayout()
+    lbl_match = QtWidgets.QLabel("name or layer contains")
+    edit_match = QtWidgets.QLineEdit()
+    edit_match.setPlaceholderText("e.g. vision")
+    edit_match.setMaximumWidth(160)
+    btn_match = QtWidgets.QPushButton("Mark matching objects as this type")
+    row3c.addWidget(lbl_match)
+    row3c.addWidget(edit_match)
+    row3c.addWidget(btn_match)
+    row3c.addStretch(1)
+    lay3.addLayout(row3c)
     lbl_uv = QtWidgets.QLabel(
         "Assigning also wires the roller wave bump map into each material's "
         "geometry normal channel (find the 'g2m roller wave' bitmap in "
@@ -2103,25 +2270,20 @@ def show_gui():
         def load():
             import os
             state["manifest"] = load_manifest(path)
-            keys = sorted(state["manifest"].keys())
+            products = _product_keys(state["manifest"])
             combo_type.clear()
-            combo_type.addItems(keys)
-            multi = len(keys) > 1
-            combo_type.setVisible(multi)
-            btn_stamp.setVisible(multi)
-            lbl_multi.setVisible(multi)
+            combo_type.addItems(products)
             lbl_manifest.setText(path)
             export_dir = os.path.dirname(os.path.abspath(path))
-            print("g2m: manifest loaded; %d glazing type(s): %s"
-                  % (len(keys), ", ".join(keys)))
-            if not multi:
-                print("  One type only: Assign materials applies it to the selection,"
-                      " or to everything tagged when nothing is selected.")
-            pans = [k for k in keys if k.endswith("_pan")]
+            print("g2m: manifest loaded; product(s): %s" % ", ".join(products))
+            if len(products) == 1:
+                print("  Assign types untyped objects in scope as '%s' and binds"
+                      " them; objects typed for another product are left alone."
+                      % products[0])
+            pans = [k for k in state["manifest"] if k.endswith("_pan")]
             if pans:
-                print("  Spandrel back pan type %s: select the pans (tagged as back"
-                      " pans), Mark selection as this type, then Assign."
-                      % ", ".join(pans))
+                print("  Ships a back pan material (%s): pans tagged under this"
+                      " product bind to it automatically." % ", ".join(pans))
             print("  Export folder: %s" % export_dir)
             print("  Its parent must be an Iray+ MDL search path: %s"
                   % os.path.dirname(export_dir))
@@ -2131,64 +2293,14 @@ def show_gui():
 
     btn_stamp.clicked.connect(
         lambda: run(lambda: assign_type(combo_type.currentText()), redraw=False))
+    btn_match.clicked.connect(
+        lambda: run(lambda: assign_type_matching(edit_match.text(),
+                                                 combo_type.currentText()),
+                    redraw=False))
 
     def do_bind():
-        manifest = state["manifest"]
-        if not manifest:
-            print("g2m: choose the bind_manifest.json first.")
-            return
-        keys = set(manifest)
+        assign_from_manifest(state["manifest"])
 
-        def current_type(obj):
-            cur = rt.getUserProp(obj, PROP_TYPE)
-            return str(cur) if cur not in (None, "", "undefined") else None
-
-        # A viewport selection scopes Assign to the tagged lites in it, so a
-        # second product (the spandrel ZIP after the vision ZIP) reaches only
-        # the lites it is for. Nothing selected: everything tagged, as before.
-        targets = _tagged_objects()
-        if list(rt.selection):
-            targets = [o for o in targets if _is_selected(o)]
-            if not targets:
-                print("g2m: nothing in the selection is tagged. Tag it first,"
-                      " or clear the selection to assign to everything tagged.")
-                return
-            print("g2m: assigning to the %d tagged lites in the selection."
-                  % len(targets))
-
-        if len(keys) == 1:
-            # One type in the manifest: Assign means "apply THIS product to
-            # the lites in scope". Type stamps from an earlier product are
-            # stale state there, not intent — overwrite them, and say so.
-            only = next(iter(keys))
-            stamped = restamped = 0
-            for obj in targets:
-                cur = current_type(obj)
-                if cur == only:
-                    continue
-                rt.setUserProp(obj, PROP_TYPE, only)
-                if cur is None:
-                    stamped += 1
-                else:
-                    restamped += 1
-            if stamped:
-                print("g2m: stamped %d untyped lites as '%s'." % (stamped, only))
-            if restamped:
-                print("g2m: re-stamped %d lites from an earlier product to '%s'."
-                      % (restamped, only))
-        else:
-            # Several types: stamps are meaningful, but a stamp this manifest
-            # doesn't know would bind nothing — say which and how to fix it.
-            strays = {}
-            for obj in targets:
-                cur = current_type(obj)
-                if cur is not None and cur not in keys:
-                    strays[cur] = strays.get(cur, 0) + 1
-            for t, n in sorted(strays.items()):
-                print("g2m: %d lites are typed '%s', which this manifest does"
-                      " not offer; left alone. Select them and Mark as one"
-                      " of: %s" % (n, t, ", ".join(sorted(keys))))
-        bind(material_factory=make_iray_mdl_factory(manifest), objects=targets)
     btn_bind.clicked.connect(lambda: run(do_bind))
 
     # Extras + log

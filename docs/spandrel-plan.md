@@ -75,7 +75,14 @@ mutually exclusive.
    listener knob, off. Also field-hit: Tag + color check repainted the
    already-bound vision lites — `qa()` now scopes to what Tag just stamped
    (or the selection), like Assign. `bind()` leaves foreign products and
-   unknown positions alone.
+   unknown positions alone. **Second field pass, same night:** Assign
+   with nothing selected re-stamped everything (the trap), and tagging
+   pans by hand does not scale to a facade → `assign_from_manifest` never
+   re-types another product's objects; pans route to `X_pan` in `bind()`;
+   Tag decides pan-behind per object from `SPANDREL_NAME_HINTS` (Jeff's
+   names carry "spandrel"/"vision") and leaves its pieces selected;
+   *Mark matching objects as this type* types hundreds of lites from a
+   name fragment. Flow in `docs/max-apply-workflow.md`.
 3. **Kit renders 12 and 13** on the workstation before any spandrel ZIP goes
    to a project (render gate). Then the field model: vision lites bound,
    select spandrels, Assign the spandrel ZIP, confirm no clobbering, render.

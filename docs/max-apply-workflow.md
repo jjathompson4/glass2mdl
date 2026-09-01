@@ -212,17 +212,24 @@ Record results as a session in [mdl-compat.md](mdl-compat.md):
 - Module caching: when iterating on materials, remember Max serves a stale
   module until the filename changes or Max restarts
   ([iray-findings.md](iray-findings.md) §7.2).
-- **Spandrels (2026-09-01, built, not yet field-tested)** — see
-  [spandrel-plan.md](spandrel-plan.md). Two products in one scene: `bind()`
-  leaves lites typed for another product alone (it used to blank them with
-  an empty Multi-Sub), and Assign scopes to the viewport selection when
-  there is one. A flood-coated lite binds like any lite (the manifest's
-  `slot_params` turn the paint on for ID 2). A shadow-box **back pan** is
-  its own manifest type `<prefix>_pan`: tag the pans with *Tag selection as
-  back pan* (no face IDs, no IGU grouping — `tag_as_pan()`), load the
-  spandrel manifest, pick the `_pan` type, Mark selection as this type,
-  Assign. Pans get no roller wave and no UV map. **Open**: a pan modeled as
-  a thin solid sheet passes sheet pairing as a lite and would turn a DGU
-  spandrel into outer/center/inner — `ga.MIN_LITE_THICKNESS_MM = 2.5` in the
-  listener rejects sheets under 2.5mm from both lite tests; whether it needs
-  to be the default waits on `debug_shells()` on a real spandrel panel.
+- **Spandrels and two products in one scene (2026-09-01, field-tested
+  twice on the GL31X model)** — see [spandrel-plan.md](spandrel-plan.md).
+  The facade-scale flow, nothing re-selected by hand:
+  1. Select the glazing (all of it, or by layer) → Check → **Tag** once.
+     Objects whose name or layer says spandrel / shadow box get the
+     innermost sheet of their stack tagged as the metal **back pan**
+     (`SPANDREL_NAME_HINTS`; the Tag-step checkbox forces it for every
+     stack). Pans carry position `pan`, no face IDs. Tag leaves exactly
+     what it tagged selected, split pieces included.
+  2. Load the vision manifest → *Mark matching* "vision" (every tagged
+     object whose name or layer contains it; `assign_type_matching`) →
+     Assign. Assign binds the selection, or everything tagged when nothing
+     is selected, and **never re-types objects typed for another product**
+     (`assign_from_manifest`; the old silent re-stamp is gone).
+  3. Load the spandrel manifest → *Mark matching* "spandrel" → Assign. Pans
+     typed with the glass prefix bind to the product's `_pan` type by
+     themselves; a flood-coat product (no pan material) reports them left
+     alone. Pans get no roller wave and no UV map.
+  `tag_as_pan()` / *Tag selection as back pan* remains for pans the lite
+  test rejects. `MIN_LITE_THICKNESS_MM` (listener, off) is a fallback for
+  pans read as lites on models without helpful names.

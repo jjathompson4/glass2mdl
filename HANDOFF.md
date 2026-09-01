@@ -92,7 +92,13 @@ checkbox "innermost sheet is the back pan" now strips it), and Tag + color
 check repainted the bound vision lites (`qa()` now scopes to what was just
 tagged, like Assign). Window tidied: section 0 practice scene, Shell
 details in the extras row, scene scan removed from the window (listener
-only). Merge to `main` (= production) only after kit 12/13 render on the
+only). **Second pass:** the "Assign with nothing selected re-stamps
+everything" trap is gone (`assign_from_manifest` never re-types another
+product's objects), pans route to `_pan` automatically, Tag reads
+spandrel-vs-vision from object names/layers and leaves its pieces
+selected, and *Mark matching objects as this type* types a whole facade
+from a name fragment — the flow is in `docs/max-apply-workflow.md`.
+Merge to `main` (= production) only after kit 12/13 render on the
 workstation and the two-ZIP field check on the GL31X model; the open loops
 (Debug shells on a spandrel panel, cavity depth, planar pan surfaces, the
 owed TGU render) are listed at the end of `docs/spandrel-plan.md`.
