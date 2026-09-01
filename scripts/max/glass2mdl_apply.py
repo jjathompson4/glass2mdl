@@ -329,6 +329,8 @@ def _analyze_loops(loops, plane_tol, max_thickness, faces=None):
     fill = a["area"] / bounds if bounds > 0 else 0.0
     return {
         "extent_min": extent_min,
+        "extent_u": extent_u,
+        "extent_v": extent_v,
         "fill": fill,
         "axis": a["n"],
         "center": ((a["center"][0] + b["center"][0]) / 2,
@@ -1407,6 +1409,27 @@ def report():
         print("  IGU %s: %s" % (key, listing))
 
 
+def untag_selected():
+    """Untag ONLY the current selection — for a frame piece or other false
+    positive that slipped past the screens, so one bad tag doesn't force
+    clear_tags() on the whole scene. Face IDs and the type stamp are left
+    alone; qa() and bind() key off the tag, so an untagged object simply
+    drops out of both. If a real lite was untagged by mistake, re-run tag()
+    on its IGU — the remaining lites keep stale positions otherwise."""
+    if rt is None:
+        print("Run inside 3ds Max.")
+        return
+    n = 0
+    for obj in rt.selection:
+        tagged = rt.getUserProp(obj, PROP_TAGGED)
+        if tagged == 1 or str(tagged) == "1":
+            rt.setUserProp(obj, PROP_TAGGED, "0")
+            rt.setUserProp(obj, PROP_IGU, "")
+            rt.setUserProp(obj, PROP_POSITION, "")
+            n += 1
+    print("g2m: untagged %d of %d selected objects." % (n, len(list(rt.selection))))
+
+
 def clear_tags():
     """Reset every g2m stamp — including the product type, which otherwise
     survives in the scene and can bleed into the next product's bind."""
@@ -1487,6 +1510,50 @@ def check_selection(max_faces=2000, min_pane_mm=200.0, plane_tol_mm=1.0,
     elif ok:
         print("  You can Tag now; the objects above will be skipped.")
     return ok
+
+
+def debug_shells(max_faces=20000, plane_tol_mm=1.0, max_thickness_mm=60.0,
+                 min_pane_mm=200.0):
+    """Explain the current selection shell by shell: what the splitter sees
+    and which screen accepts or rejects each shell, with the numbers behind
+    every verdict. Touches nothing — run it when Check or Tag says something
+    surprising, and read (or send back) the log."""
+    if rt is None:
+        print("Run inside 3ds Max.")
+        return
+    sel = list(rt.selection)
+    if not sel:
+        print("g2m: nothing selected. Select the objects to explain first.")
+        return
+    plane_tol = _mm(plane_tol_mm)
+    max_thickness = _mm(max_thickness_mm)
+    mm = _mm(1.0)  # system units per millimeter, for printing
+    for obj in sel:
+        loops, why = _snapshot_loops(obj, max_faces)
+        if loops is None:
+            print("g2m: %s: %s" % (obj.name, why))
+            continue
+        shells = _elements(loops, plane_tol)
+        print("g2m: %s: %d faces in %d shell(s)" % (obj.name, len(loops), len(shells)))
+        shells.sort(key=len, reverse=True)
+        for i, faces in enumerate(shells, 1):
+            rec, shell_why = _analyze_loops(loops, plane_tol, max_thickness,
+                                            faces=faces)
+            if rec is None:
+                verdict = shell_why
+            elif rec["fill"] < 0.35:
+                verdict = ("rejected: covers %.0f%% of its bounds"
+                           " (hollow — frame cap?)" % (rec["fill"] * 100))
+            elif rec["extent_min"] < _mm(min_pane_mm):
+                verdict = ("rejected: %.0fmm in-plane, narrower than the"
+                           " %.0fmm pane minimum (setting block?)"
+                           % (rec["extent_min"] / mm, min_pane_mm))
+            else:
+                verdict = ("LITE — thickness %.1fmm, %.0fmm x %.0fmm,"
+                           " covers %.0f%% of its bounds"
+                           % (rec["thickness"] / mm, rec["extent_u"] / mm,
+                              rec["extent_v"] / mm, rec["fill"] * 100))
+            print("  shell %d (%d faces): %s" % (i, len(faces), verdict))
 
 
 def probe_manifest(manifest):
@@ -1604,14 +1671,17 @@ def show_gui():
                  "then check them here. Nothing is modified by the check.")
     row1 = QtWidgets.QHBoxLayout()
     btn_check = QtWidgets.QPushButton("Check my selection")
+    btn_shells = QtWidgets.QPushButton("Shell details")
     btn_scan = QtWidgets.QPushButton("Find candidates for me")
     btn_test = QtWidgets.QPushButton("Build test scene")
     row1.addWidget(btn_check)
+    row1.addWidget(btn_shells)
     row1.addWidget(btn_scan)
     row1.addWidget(btn_test)
     row1.addStretch(1)
     lay1.addLayout(row1)
     btn_check.clicked.connect(lambda: run(check_selection, redraw=False))
+    btn_shells.clicked.connect(lambda: run(debug_shells, redraw=False))
     btn_scan.clicked.connect(lambda: run(find_glazing))
     btn_test.clicked.connect(lambda: run(build_test_scene))
 
@@ -1765,12 +1835,15 @@ def show_gui():
     # Extras + log
     row4 = QtWidgets.QHBoxLayout()
     btn_report = QtWidgets.QPushButton("Report")
+    btn_untag = QtWidgets.QPushButton("Untag selected")
     btn_clear = QtWidgets.QPushButton("Clear tags")
     row4.addWidget(btn_report)
+    row4.addWidget(btn_untag)
     row4.addWidget(btn_clear)
     row4.addStretch(1)
     root.addLayout(row4)
     btn_report.clicked.connect(lambda: run(report, redraw=False))
+    btn_untag.clicked.connect(lambda: run(untag_selected, redraw=False))
     btn_clear.clicked.connect(lambda: run(clear_tags))
 
     root.addWidget(log)
