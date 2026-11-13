@@ -102,7 +102,9 @@ describe("roller wave map generation", () => {
     // Normalized to full range: depth control lives on the Max side.
     expect(min).toBe(0);
     expect(max).toBe(255);
-  });
+    // Half a million per-pixel assertions: a slow CI runner has crossed the
+    // default 5s on an otherwise passing run.
+  }, 30_000);
 });
 
 describe("roller wave in the export bundle", () => {
