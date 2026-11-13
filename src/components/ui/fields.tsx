@@ -3,7 +3,7 @@
 import { useId, useState, type ReactNode } from "react";
 
 const inputClass =
-  "w-full rounded-md border border-border-subtle bg-surface px-2.5 py-1.5 text-sm text-foreground outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20 disabled:opacity-50";
+  "h-10 w-full rounded-lg border border-border-strong/70 bg-background px-3 text-[15px] text-foreground outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20 disabled:opacity-50";
 
 export function Field({
   label,
@@ -18,12 +18,12 @@ export function Field({
 }) {
   return (
     <label className="flex flex-col gap-1">
-      <span className="text-xs font-medium text-muted">{label}</span>
+      <span className="text-[13px] font-medium text-muted">{label}</span>
       {children}
       {error ? (
-        <span className="text-xs text-danger">{error}</span>
+        <span className="text-[13px] text-danger">{error}</span>
       ) : hint ? (
-        <span className="text-xs text-muted/80">{hint}</span>
+        <span className="text-[13px] leading-snug text-muted">{hint}</span>
       ) : null}
     </label>
   );
@@ -44,6 +44,7 @@ export function NumberInput({
   step,
   suffix,
   disabled,
+  ariaLabel,
 }: {
   value: number;
   onChange: (value: number) => void;
@@ -52,6 +53,7 @@ export function NumberInput({
   step?: number;
   suffix?: string;
   disabled?: boolean;
+  ariaLabel?: string;
 }) {
   // While focused the raw text is authoritative, so half-typed values like
   // "0." or "" survive keystrokes. Unfocused, the committed value is shown.
@@ -61,7 +63,8 @@ export function NumberInput({
     <div className="relative">
       <input
         type="number"
-        className={`${inputClass} ${suffix ? "pr-10" : ""} tabular-nums`}
+        className={`${inputClass} ${suffix ? "pr-10" : ""} font-mono tabular-nums`}
+        aria-label={ariaLabel}
         value={draft ?? String(round(value))}
         min={min}
         max={max}
@@ -76,7 +79,7 @@ export function NumberInput({
         }}
       />
       {suffix ? (
-        <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-muted">
+        <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[13px] text-muted">
           {suffix}
         </span>
       ) : null}
@@ -135,15 +138,18 @@ export function Select<T extends string>({
   onChange,
   options,
   disabled,
+  ariaLabel,
 }: {
   value: T;
   onChange: (value: T) => void;
   options: { value: T; label: string }[];
   disabled?: boolean;
+  ariaLabel?: string;
 }) {
   return (
     <select
       className={inputClass}
+      aria-label={ariaLabel}
       value={value}
       disabled={disabled}
       onChange={(event) => onChange(event.target.value as T)}
@@ -173,15 +179,15 @@ export function ActionButton({
   children: ReactNode;
 }) {
   const styles = danger
-    ? "border-danger/40 text-danger hover:bg-danger-soft"
+    ? "border-border-strong text-muted hover:border-danger hover:text-danger"
     : active
       ? "border-accent bg-accent text-white hover:opacity-90"
-      : "border-accent/60 bg-accent-soft text-accent hover:border-accent";
+      : "border-border-strong text-foreground hover:border-accent hover:text-accent";
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`shrink-0 rounded-md border px-3 py-1.5 text-xs font-medium transition ${styles}`}
+      className={`h-9 shrink-0 rounded-lg border px-3 text-[13px] font-medium transition ${styles}`}
     >
       {children}
     </button>
@@ -203,7 +209,7 @@ export function SegmentedControl<T extends string | number>({
     <div
       role="radiogroup"
       aria-label={ariaLabel}
-      className="inline-flex rounded-md border border-border-subtle bg-surface-sunken p-0.5"
+      className="inline-flex max-w-full flex-wrap rounded-[10px] border border-border-strong/70 bg-background p-[3px]"
     >
       {options.map((option) => {
         const selected = option.value === value;
@@ -215,9 +221,9 @@ export function SegmentedControl<T extends string | number>({
             aria-checked={selected}
             title={option.title}
             onClick={() => onChange(option.value)}
-            className={`rounded px-3 py-1 text-xs font-medium transition ${
+            className={`h-9 rounded-[7px] px-3.5 text-sm transition ${
               selected
-                ? "bg-accent text-white shadow-sm"
+                ? "bg-accent font-semibold text-white shadow-sm"
                 : "text-muted hover:text-foreground"
             }`}
           >
@@ -247,9 +253,9 @@ export function ColorInput({
         value={value}
         disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
-        className="h-8 w-10 cursor-pointer rounded border border-border-subtle bg-surface p-0.5 disabled:opacity-50"
+        className="h-10 w-12 cursor-pointer rounded-lg border border-border-strong/70 bg-background p-1 disabled:opacity-50"
       />
-      <code className="font-mono text-xs uppercase text-muted">{value}</code>
+      <code className="font-mono text-sm uppercase text-muted">{value}</code>
     </div>
   );
 }
@@ -287,29 +293,99 @@ export function Toggle({
   );
 }
 
+/** The round "?" that opens a panel's explanation. */
+export function HelpButton({
+  open,
+  onToggle,
+  label,
+  small = false,
+}: {
+  open: boolean;
+  onToggle: () => void;
+  /** What the help is about, e.g. "data sheet values". */
+  label: string;
+  small?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      aria-expanded={open}
+      aria-label={`${open ? "Hide" : "Show"} help for ${label}`}
+      onClick={onToggle}
+      className={`${small ? "h-7 w-7 text-[13px]" : "h-8 w-8 text-sm"} shrink-0 rounded-full border transition ${
+        open
+          ? "border-accent bg-accent-soft text-accent"
+          : "border-border-strong/70 text-muted hover:border-accent hover:text-accent"
+      }`}
+    >
+      ?
+    </button>
+  );
+}
+
+/** The explanation a HelpButton reveals. */
+export function HelpNote({ children }: { children: ReactNode }) {
+  return (
+    <div className="space-y-2 rounded-[10px] bg-surface-sunken px-3.5 py-3 text-sm leading-snug text-muted">
+      {children}
+    </div>
+  );
+}
+
+/**
+ * Explanations stay one click away instead of sitting on the page: the form
+ * is used far more often than it is read.
+ */
+export function useHelp(label: string, small = false) {
+  const [open, setOpen] = useState(false);
+  return {
+    open,
+    button: <HelpButton open={open} onToggle={() => setOpen(!open)} label={label} small={small} />,
+    note: (children: ReactNode) => (open ? <HelpNote>{children}</HelpNote> : null),
+  };
+}
+
 export function Section({
   id,
   title,
-  description,
+  help,
+  helpLabel,
   children,
   action,
 }: {
   /** Anchor for the diagram panel's jump-to-card scrolling. */
   id?: string;
   title: ReactNode;
-  description?: string;
+  /** Shown behind the "?" button. */
+  help?: ReactNode;
+  helpLabel?: string;
   children: ReactNode;
   action?: ReactNode;
 }) {
+  const [helpOpen, setHelpOpen] = useState(false);
   return (
-    <section id={id} className="scroll-mt-32 rounded-lg border border-border-subtle bg-surface p-4">
-      <header className="mb-3 flex items-start justify-between gap-3">
-        <div>
-          <h2 className="text-sm font-semibold text-foreground">{title}</h2>
-          {description ? <p className="mt-0.5 text-xs text-muted">{description}</p> : null}
+    <section
+      id={id}
+      className="scroll-mt-32 rounded-xl border border-border-subtle bg-surface p-4 lg:scroll-mt-4 lg:rounded-none lg:border-0 lg:border-t lg:bg-transparent lg:p-0 lg:pt-6 lg:first:border-t-0 lg:first:pt-0"
+    >
+      <header className="mb-3.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+        <h2 className="text-[17px] font-semibold text-foreground">{title}</h2>
+        <div className="flex items-center gap-2.5">
+          {action}
+          {help ? (
+            <HelpButton
+              open={helpOpen}
+              onToggle={() => setHelpOpen(!helpOpen)}
+              label={helpLabel ?? "this step"}
+            />
+          ) : null}
         </div>
-        {action}
       </header>
+      {help && helpOpen ? (
+        <div className="mb-3.5">
+          <HelpNote>{help}</HelpNote>
+        </div>
+      ) : null}
       {children}
     </section>
   );

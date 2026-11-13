@@ -39,10 +39,23 @@ export function AssemblySection() {
           Data sheet values
         </>
       }
-      description="Enter the product name and the three visible-light values from the performance table. The tool fits each lite's material properties so the rendered assembly reproduces these numbers; warnings appear if the fit is unrealistic."
+      helpLabel="data sheet values"
+      help={
+        <>
+          <p>
+            Type the product name and the three visible-light values from the performance table.
+            The tool works out each lite&apos;s material properties so the rendered assembly
+            reproduces these numbers.
+          </p>
+          <p>
+            The absorbed share is calculated, not entered. Data sheets don&apos;t print it
+            because the other two values determine it.
+          </p>
+        </>
+      }
     >
-      <div className="max-w-md">
-        <Field label="Product name" hint="Used for the material and file names.">
+      <div>
+        <Field label="Product name" hint="Becomes the material and file name.">
           <TextInput
             value={name}
             onChange={setName}
@@ -54,7 +67,7 @@ export function AssemblySection() {
 
       {/* Typed values are never rewritten — an impossible pair gets flagged
           below instead of being silently corrected. */}
-      <div className="mt-3 grid gap-4 border-t border-border-subtle pt-3 md:grid-cols-3">
+      <div className="mt-3.5 grid grid-cols-3 items-end gap-2.5">
         <Field label="Transmittance (VLT)">
           <PercentInput value={assembly.tvis} onChange={(tvis) => set({ tvis: tvis as Fraction })} />
         </Field>
@@ -73,7 +86,7 @@ export function AssemblySection() {
       </div>
 
       <div className="mt-4">
-        <div className="flex h-2 overflow-hidden rounded-full bg-surface-sunken">
+        <div className="flex h-3 overflow-hidden rounded-full bg-border-strong/50">
           <span
             className="bg-accent transition-all"
             style={{ width: `${transmitted * 100}%` }}
@@ -91,11 +104,11 @@ export function AssemblySection() {
           />
         </div>
         {over ? (
-          <p className="mt-1.5 text-xs text-danger">
+          <p className="mt-1.5 text-[13px] text-danger">
             Transmitted plus reflected light exceeds 100%. Check which columns these came from.
           </p>
         ) : (
-          <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-0.5 text-xs text-muted">
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-0.5 text-[13px] text-muted">
             <span className="inline-flex items-center gap-1.5">
               <span className="h-2.5 w-2.5 rounded-sm bg-accent" aria-hidden />
               {(transmitted * 100).toFixed(0)}% passes through
@@ -110,11 +123,6 @@ export function AssemblySection() {
             </span>
           </div>
         )}
-        {!over ? (
-          <p className="mt-1 text-xs text-muted/80">
-            Absorption is calculated from the values entered above.
-          </p>
-        ) : null}
       </div>
     </Section>
   );

@@ -50,12 +50,22 @@ export function RenderingSection() {
           Rendering
         </>
       }
-      description="How the materials meet your 3ds Max scene — not from the data sheet."
+      helpLabel="rendering options"
+      help={
+        <>
+          <p>These two choices describe your 3ds Max scene. They do not come from the data sheet.</p>
+          <p>
+            Roller wave: real heat-treated glass carries a faint ripple from the tempering
+            rollers. It is what makes reflections read as glass. It ships as a bump map that the
+            apply script wires into the material for you.
+          </p>
+        </>
+      }
     >
       {/* The geometry choice decides everything the tool generates, so its
           two options carry their explanations in plain sight. */}
       <div>
-        <p className="text-xs font-medium text-muted">
+        <p className="text-sm text-muted">
           How is the glazing modeled in your 3ds Max scene?
         </p>
         <div
@@ -72,21 +82,21 @@ export function RenderingSection() {
                 role="radio"
                 aria-checked={selected}
                 onClick={() => setMode(option.value)}
-                className={`rounded-md border p-3 text-left transition ${
+                className={`rounded-[10px] border p-3 text-left transition ${
                   selected
                     ? "border-accent bg-accent-soft"
                     : "border-border-subtle hover:border-border-strong"
                 }`}
               >
                 <span
-                  className={`flex items-center gap-2.5 text-[13px] font-semibold ${
+                  className={`flex items-center gap-2.5 text-[15px] font-semibold ${
                     selected ? "text-accent" : "text-foreground"
                   }`}
                 >
                   <ModeGlyph mode={option.value} active={selected} />
                   {option.label}
                 </span>
-                <span className="mt-1 block text-[11px] leading-snug text-muted">
+                <span className="mt-1 block text-[13px] leading-snug text-muted">
                   {option.blurb}
                 </span>
               </button>
@@ -97,7 +107,7 @@ export function RenderingSection() {
 
       <div className="mt-3 border-t border-border-subtle pt-3">
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
-          <span className="text-xs font-medium text-muted">Roller wave</span>
+          <span className="text-sm font-medium text-foreground">Roller wave</span>
           <SegmentedControl
             ariaLabel="Roller wave depth"
             value={rollerWave?.depth ?? "off"}
@@ -112,11 +122,6 @@ export function RenderingSection() {
             ]}
           />
         </div>
-        <p className="mt-1.5 text-[11px] leading-snug text-muted/80">
-          Real heat-treated glass carries a faint ripple from the tempering rollers; it is what
-          makes reflections read as glass. Ships as a bump map the apply script wires into the
-          material for you.
-        </p>
       </div>
     </Section>
   );

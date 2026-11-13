@@ -33,14 +33,21 @@ function animateScrollTo(target: () => number) {
   raf = requestAnimationFrame(step);
 }
 
-/** The name field sits back up in card 1, a long scroll from this banner, so
- * the missing-name error carries a jump that also focuses the input. */
-function jumpToName() {
+/** The name field sits in step 1, which may be a long scroll (phone) or in
+ * the other pane (desktop) from whatever asked for it, so the jump both
+ * scrolls there and focuses the input. */
+export function jumpToName() {
   const card = document.getElementById("card-cutsheet");
   if (!card) return;
   document
     .querySelector<HTMLInputElement>('input[aria-label="Product name"]')
     ?.focus({ preventScroll: true });
+  // On the desktop layout the form scrolls inside its own pane and the window
+  // never moves, so the browser's own scrollIntoView is safe there.
+  if (window.matchMedia("(min-width: 1024px)").matches) {
+    card.scrollIntoView({ behavior: "smooth", block: "start" });
+    return;
+  }
   // 128px clears the sticky header + condensed bar (the cards' scroll-mt-32).
   animateScrollTo(() => Math.max(0, window.scrollY + card.getBoundingClientRect().top - 128));
 }
@@ -52,7 +59,9 @@ export function ValidationBanner({
   issues: ValidationIssue[];
   warnings: SolverWarning[];
 }) {
-  const errors = issues.filter((i) => i.severity === "error");
+  // A missing name is asked for in the download slot, not shouted here: on a
+  // first visit nothing has gone wrong yet.
+  const errors = issues.filter((i) => i.severity === "error" && i.code !== "name-required");
   const cautions = issues.filter((i) => i.severity === "warning");
 
   if (!errors.length && !cautions.length && !warnings.length) return null;
@@ -64,18 +73,6 @@ export function ValidationBanner({
           {errors.map((issue) => (
             <li key={issue.code + issue.field}>
               {issue.message}
-              {issue.code === "name-required" ? (
-                <>
-                  {" "}
-                  <button
-                    type="button"
-                    onClick={jumpToName}
-                    className="font-semibold underline underline-offset-2 transition hover:opacity-80"
-                  >
-                    Go to the name field
-                  </button>
-                </>
-              ) : null}
             </li>
           ))}
         </Callout>
@@ -110,7 +107,7 @@ function Callout({
       : "border-warning/30 bg-warning-soft text-warning";
 
   return (
-    <div className={`rounded-lg border px-3 py-2.5 text-xs ${styles}`}>
+    <div className={`rounded-lg border px-3 py-2.5 text-[13px] ${styles}`}>
       <p className="font-semibold">{title}</p>
       <ul className="mt-1 list-disc space-y-1 pl-4 leading-relaxed opacity-95">{children}</ul>
     </div>

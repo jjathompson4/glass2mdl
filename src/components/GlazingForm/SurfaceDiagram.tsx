@@ -109,7 +109,10 @@ export function SurfaceDiagram({
   onFeatureClick,
   onAddAt,
   onAddLite,
+  large = false,
 }: {
+  /** The result pane's version: fills the stage and drops the caption. */
+  large?: boolean;
   lites: LiteInput[];
   gaps: GapInput[];
   coatingSurface?: SurfaceNumber;
@@ -147,7 +150,7 @@ export function SurfaceDiagram({
     <figure>
       <svg
         viewBox={`0 0 ${VIEWBOX_WIDTH} ${HEIGHT}`}
-        className="mx-auto h-auto max-h-[230px] w-full"
+        className={large ? "mx-auto h-auto max-h-[min(46vh,440px)] w-full" : "mx-auto h-auto max-h-[230px] w-full"}
         role="img"
         aria-label={`Cross-section of ${lites.length}-lite glazing, exterior at left`}
       >
@@ -292,11 +295,13 @@ export function SurfaceDiagram({
         ) : null}
       </svg>
 
-      <figcaption className="px-1 pb-0.5 pt-1 text-[11px] text-muted">
-        Drawn to scale, numbered from the exterior inward; tint colors are deepened so they stay
-        visible — the download uses the true values. Click a tag to edit a feature, or + on a
-        bare surface to add one.
-      </figcaption>
+      {large ? null : (
+        <figcaption className="px-1 pb-0.5 pt-1 text-[13px] leading-snug text-muted">
+          Drawn to scale, numbered from the exterior inward. Tint colors are deepened so they stay
+          visible; the download uses the true values. Click a tag to edit a feature, or + on a bare
+          surface to add one.
+        </figcaption>
+      )}
     </figure>
   );
 }

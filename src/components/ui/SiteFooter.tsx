@@ -5,7 +5,7 @@ const linkClass = "text-accent transition hover:opacity-80";
 export function SiteFooter({ showAbout = true }: { showAbout?: boolean }) {
   return (
     <footer className="mt-auto border-t border-border-subtle px-5 py-5">
-      <div className="mx-auto flex max-w-[820px] flex-col items-center gap-1.5 text-center text-xs text-muted">
+      <div className="mx-auto flex max-w-[820px] flex-col items-center gap-1.5 text-center text-[13px] text-muted">
         <p>
           For rendering and visualization only, not for thermal or annual daylight analysis.
         </p>
