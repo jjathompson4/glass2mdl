@@ -12,7 +12,7 @@ import {
   type RGB,
 } from "@/engine";
 import { useAppStore } from "@/lib/store";
-import { ActionButton, NumberInput, SegmentedControl } from "@/components/ui/fields";
+import { ActionButton, NumberInput, SegmentedControl, useHelp } from "@/components/ui/fields";
 
 /**
  * Colour, swatch-first: the tool shows the three colours it already derived
@@ -40,6 +40,75 @@ const ROWS: Row[] = [
   { key: "reflectedColorInt", label: "Reflection, seen from inside", metric: "interior reflectance" },
 ];
 
+/**
+ * The three assembly colors as labeled swatches, with the one action that
+ * opens the editor. Lives in the result pane on a desktop and under
+ * Construction on a phone.
+ */
+export function GlassColorSummary() {
+  const assembly = useAppStore((s) => s.system.assembly);
+  const lites = useAppStore((s) => s.system.lites);
+  const [open, setOpen] = useState(false);
+  const help = useHelp("glass color", true);
+
+  const coatingHue = lites.find((l) => l.coating)?.coating?.reflectedColor ?? gray(1);
+  const swatches: { label: string; color: RGB }[] = [
+    { label: "Looking through", color: resolveColorSpec(assembly.transmittedColor, nominalAssemblyHue(lites)) },
+    { label: "Reflection, outside", color: resolveColorSpec(assembly.reflectedColorExt, coatingHue) },
+    { label: "Reflection, inside", color: resolveColorSpec(assembly.reflectedColorInt, coatingHue) },
+  ];
+  const adjustedCount = [
+    assembly.transmittedColor,
+    assembly.reflectedColorExt,
+    assembly.reflectedColorInt,
+  ].filter((spec) => spec && spec.kind !== "auto").length;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <p className="text-[15px] font-semibold text-foreground">Glass color</p>
+          {help.button}
+        </div>
+        <div className="flex shrink-0 items-center gap-2.5">
+          {adjustedCount ? (
+            <span className="text-[13px] text-muted">{adjustedCount} adjusted</span>
+          ) : null}
+          <ActionButton onClick={() => setOpen(!open)} active={open}>
+            {open ? "Done" : "Adjust…"}
+          </ActionButton>
+        </div>
+      </div>
+
+      {help.note(
+        <>
+          <p>
+            These are the colors of the whole assembly. VLT and the two reflectance values set
+            the brightness; the substrate menu supplies a representative hue.
+          </p>
+          <p>
+            If the data sheet lists color data, click Adjust and enter it. Measured colors from
+            the LBNL International Glazing Database are coming soon.
+          </p>
+        </>,
+      )}
+
+      {open ? (
+        <GlassColorPanel />
+      ) : (
+        <div className="flex flex-wrap gap-x-5 gap-y-2">
+          {swatches.map((swatch) => (
+            <span key={swatch.label} className="inline-flex items-center gap-2">
+              <Swatch color={swatch.color} size="h-7 w-7" />
+              <span className="text-[13px] text-muted">{swatch.label}</span>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function GlassColorPanel() {
   const assembly = useAppStore((s) => s.system.assembly);
   const lites = useAppStore((s) => s.system.lites);
@@ -60,7 +129,7 @@ export function GlassColorPanel() {
 
   const sourceLine = (key: ColorKey, spec: ColorSpec | undefined): string => {
     if (spec && spec.kind !== "auto") {
-      return spec.kind === "srgb" ? "adjusted by eye" : "adjusted from the datasheet";
+      return spec.kind === "srgb" ? "adjusted by eye" : "adjusted from the data sheet";
     }
     if (key === "transmittedColor") return "from the tint table";
     return coating?.reflectedColor ? "from the coating's reflected color" : "neutral (nothing measured)";
@@ -68,10 +137,10 @@ export function GlassColorPanel() {
 
   return (
     <div className="space-y-3">
-      <p className="rounded-md bg-surface-sunken px-2.5 py-2 text-xs leading-snug text-muted">
+      <p className="rounded-md bg-surface-sunken px-2.5 py-2 text-[13px] leading-snug text-muted">
         These are the colors of the whole assembly: every lite and any coating together, not a
         single lite. Your substrate choices already produce them. Adjust one only if the
-        datasheet prints color values, or you are matching a physical sample.
+        data sheet prints color values, or you are matching a physical sample.
       </p>
 
       <div className="space-y-2">
@@ -84,8 +153,8 @@ export function GlassColorPanel() {
               <div className="flex items-center gap-3">
                 <Swatch color={hue} />
                 <div className="min-w-0 flex-1">
-                  <p className="text-[13px] text-foreground">{row.label}</p>
-                  <p className="text-[11px] text-muted/80">{sourceLine(row.key, spec)}</p>
+                  <p className="text-[15px] text-foreground">{row.label}</p>
+                  <p className="text-[13px] text-muted">{sourceLine(row.key, spec)}</p>
                 </div>
                 <ActionButton onClick={() => setEditing(open ? null : row.key)} active={open}>
                   {open ? "Done" : "Adjust…"}
@@ -146,7 +215,7 @@ function ColorEditor({
       <div className="grid grid-cols-2 gap-2">
         <MethodCard
           selected={method === "typed"}
-          title="Type the datasheet's values"
+          title="Type the data sheet's values"
           blurb="Some sheets print color numbers under “color rendering”."
           onClick={startTyped}
         />
@@ -171,7 +240,7 @@ function ColorEditor({
             className="h-8 w-11 cursor-pointer rounded border border-border-subtle bg-surface p-0.5"
             aria-label={`${row.label} color`}
           />
-          <p className="text-[11px] leading-snug text-muted">
+          <p className="text-[13px] leading-snug text-muted">
             Only the hue is used. How light or dark the glass is stays set by your {row.metric} in
             Data sheet values.
           </p>
@@ -182,15 +251,15 @@ function ColorEditor({
         <button
           type="button"
           onClick={() => onChange({ kind: "auto" })}
-          className="text-[11px] font-medium text-accent transition hover:opacity-80"
+          className="text-[13px] font-medium text-accent transition hover:opacity-80"
         >
           Reset to the substrate color
         </button>
       ) : null}
 
       <div className="flex items-center justify-between gap-3 border-t border-border-subtle pt-2">
-        <p className="text-[11px] leading-snug text-muted/80">
-          Sheet says “10° observer” or “2°”? Set it here. If it doesn&apos;t say, leave 10°.
+        <p className="text-[13px] leading-snug text-muted">
+          Observer angle printed on the sheet. If it doesn&apos;t say, leave 10°.
         </p>
         <SegmentedControl
           ariaLabel="Standard observer"
@@ -227,28 +296,28 @@ function TypedInputs({
   return (
     <div className="space-y-2 rounded-md bg-surface-sunken p-2.5">
       <div className="flex items-center gap-2">
-        <span className="text-xs text-muted">The sheet prints</span>
+        <span className="text-[13px] text-muted">The sheet prints</span>
         <div className="inline-flex rounded-md border border-border-subtle bg-surface p-0.5">
-          <ToggleChip selected={spec.kind === "lab"} onClick={toLab} label="L*a*b*" />
-          <ToggleChip selected={spec.kind === "xy"} onClick={toXy} label="x, y" />
+          <ToggleChip selected={spec.kind === "lab"} onClick={toLab} label="Lightness and hue (L*a*b*)" />
+          <ToggleChip selected={spec.kind === "xy"} onClick={toXy} label="Chromaticity (x, y)" />
         </div>
       </div>
 
       {spec.kind === "lab" ? (
         <>
           <div className="flex flex-wrap items-end gap-2">
-            <Compact label="L*">
+            <Compact label="L* (lightness)">
               <NumberInput value={spec.L} onChange={(L) => onChange({ ...spec, L })} min={0} max={100} step={0.1} />
             </Compact>
-            <Compact label="a*">
+            <Compact label="a* (green to red)">
               <NumberInput value={spec.a} onChange={(a) => onChange({ ...spec, a })} min={-60} max={60} step={0.1} />
             </Compact>
-            <Compact label="b*">
+            <Compact label="b* (blue to yellow)">
               <NumberInput value={spec.b} onChange={(b) => onChange({ ...spec, b })} min={-60} max={60} step={0.1} />
             </Compact>
           </div>
           <LightnessCheck L={spec.L} level={level} metric={row.metric} />
-          <p className="text-[11px] leading-snug text-muted/80">
+          <p className="text-[13px] leading-snug text-muted">
             Only a* and b* (the hue) are used. Brightness comes from your {row.metric} in
             Data sheet values, so L* just gets cross-checked against it.
           </p>
@@ -256,14 +325,14 @@ function TypedInputs({
       ) : (
         <>
           <div className="flex flex-wrap items-end gap-2">
-            <Compact label="x" width="w-28">
+            <Compact label="x" width="w-32">
               <NumberInput value={spec.x} onChange={(x) => onChange({ ...spec, x })} min={0} max={1} step={0.0001} />
             </Compact>
-            <Compact label="y" width="w-28">
+            <Compact label="y" width="w-32">
               <NumberInput value={spec.y} onChange={(y) => onChange({ ...spec, y })} min={0} max={1} step={0.0001} />
             </Compact>
           </div>
-          <p className="text-[11px] leading-snug text-muted/80">
+          <p className="text-[13px] leading-snug text-muted">
             Chromaticity carries the hue only; brightness stays set by your {row.metric} in Data sheet values.
           </p>
         </>
@@ -278,13 +347,13 @@ function LightnessCheck({ L, level, metric }: { L: number; level: number; metric
   const agrees = Math.abs(implied - level) <= 0.02;
 
   return agrees ? (
-    <p className="flex items-center gap-1.5 text-[11px] text-success">
+    <p className="flex items-center gap-1.5 text-[13px] text-success">
       <CheckIcon />
       L* {L.toFixed(1)} ≈ {(implied * 100).toFixed(0)}%, matching your {(level * 100).toFixed(0)}%{" "}
       {metric}
     </p>
   ) : (
-    <p className="text-[11px] text-warning">
+    <p className="text-[13px] text-warning">
       L* {L.toFixed(1)} ≈ {(implied * 100).toFixed(0)}%, but {(level * 100).toFixed(0)}% was entered
       in Data sheet values. Check both came from the same product row.
     </p>
@@ -320,8 +389,8 @@ function MethodCard({
         selected ? "border-accent bg-accent-soft" : "border-border-subtle hover:border-border-strong"
       }`}
     >
-      <p className={`text-xs font-semibold ${selected ? "text-accent" : "text-foreground"}`}>{title}</p>
-      <p className="mt-0.5 text-[11px] leading-snug text-muted">{blurb}</p>
+      <p className={`text-[13px] font-semibold ${selected ? "text-accent" : "text-foreground"}`}>{title}</p>
+      <p className="mt-0.5 text-[13px] leading-snug text-muted">{blurb}</p>
     </button>
   );
 }
@@ -346,7 +415,7 @@ function ToggleChip({ selected, onClick, label }: { selected: boolean; onClick: 
       role="radio"
       aria-checked={selected}
       onClick={onClick}
-      className={`rounded px-2.5 py-1 text-[11px] font-medium transition ${
+      className={`h-9 rounded-[7px] px-3 text-[13px] font-medium transition ${
         selected ? "bg-surface-sunken text-foreground shadow-sm" : "text-muted hover:text-foreground"
       }`}
     >
@@ -357,7 +426,7 @@ function ToggleChip({ selected, onClick, label }: { selected: boolean; onClick: 
 
 function Compact({
   label,
-  width = "w-24",
+  width = "w-[124px]",
   children,
 }: {
   label: string;
@@ -365,8 +434,8 @@ function Compact({
   children: React.ReactNode;
 }) {
   return (
-    <label className={`flex items-center gap-1.5 ${width}`}>
-      <span className="text-[11px] font-medium text-muted">{label}</span>
+    <label className={`flex flex-col gap-1.5 ${width}`}>
+      <span className="text-[13px] font-medium text-muted">{label}</span>
       {children}
     </label>
   );

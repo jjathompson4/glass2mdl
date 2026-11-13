@@ -23,16 +23,104 @@ import { MiniSection, SurfaceDiagram, type DiagramFeature } from "./SurfaceDiagr
  * between the two heights fought the browser's scroll anchoring and made
  * scrolling snap back.)
  */
-export function DiagramPanel({ derived }: { derived: DerivedOptics | null }) {
+/**
+ * The diagram and its add-a-feature picker, shared by the phone panel and the
+ * desktop result pane so both drive the same store actions.
+ */
+export function useDiagramControls(large = false) {
   const system = useAppStore((s) => s.system);
   const moveCoatingToSurface = useAppStore((s) => s.moveCoatingToSurface);
   const setFrit = useAppStore((s) => s.setFrit);
   const setLiteCount = useAppStore((s) => s.setLiteCount);
+  const [pendingAdd, setPendingAdd] = useState<SurfaceNumber | null>(null);
+
+  const coating = system.lites.find((l) => l.coating)?.coating;
+  const frit = system.frit;
+  const canAddCoating = !coating;
+  const canAddFrit = !frit;
+
+  const scrollToCard = (id: string) => {
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const jumpToFeature = (feature: DiagramFeature) => {
+    scrollToCard(feature === "coating" ? "card-coating" : "card-frit");
+  };
+
+  const addCoating = (surface: SurfaceNumber) => {
+    moveCoatingToSurface(surface);
+    setPendingAdd(null);
+    scrollToCard("card-coating");
+  };
+
+  const addFrit = (surface: SurfaceNumber) => {
+    setFrit(defaultFrit(surface, { r: 0.9, g: 0.9, b: 0.88 }));
+    setPendingAdd(null);
+    scrollToCard("card-frit");
+  };
+
+  // What the + on a bare surface can add.
+  const optionsAt = () => [
+    ...(canAddCoating ? [{ label: "Coating", add: addCoating, style: "border-accent text-accent hover:bg-accent hover:text-white" }] : []),
+    ...(canAddFrit ? [{ label: "Frit", add: addFrit, style: "border-warning text-warning hover:bg-warning-soft" }] : []),
+  ];
+
+  const handleAddAt = (surface: SurfaceNumber) => {
+    // With only one kind of feature left to add there is nothing to ask.
+    const options = optionsAt();
+    if (options.length === 1) return options[0].add(surface);
+    setPendingAdd(surface);
+  };
+
+  const diagram = (
+    <SurfaceDiagram
+      large={large}
+      lites={system.lites}
+      gaps={system.gaps}
+      coatingSurface={coating?.surface}
+      fritSurface={frit?.surface}
+      onFeatureClick={jumpToFeature}
+      onAddAt={canAddCoating || canAddFrit ? handleAddAt : undefined}
+      onAddLite={
+        system.lites.length < 3 ? () => setLiteCount(system.lites.length + 1) : undefined
+      }
+    />
+  );
+
+  const picker =
+    pendingAdd !== null ? (
+      <div className="mt-1.5 flex flex-wrap items-center gap-2 rounded-lg border border-accent/40 bg-accent-soft px-3 py-2 text-[13px]">
+        <span className="font-medium text-foreground">Add to surface #{pendingAdd}:</span>
+        {optionsAt().map((option) => (
+          <button
+            key={option.label}
+            type="button"
+            onClick={() => option.add(pendingAdd)}
+            className={`h-9 rounded-lg border bg-surface px-3 font-medium transition ${option.style}`}
+          >
+            {option.label}
+          </button>
+        ))}
+        <button
+          type="button"
+          onClick={() => setPendingAdd(null)}
+          className="ml-auto h-9 rounded-lg px-2 text-muted transition hover:text-foreground"
+        >
+          Cancel
+        </button>
+      </div>
+    ) : null;
+
+  return { diagram, picker, jumpToFeature };
+}
+
+export function DiagramPanel({ derived }: { derived: DerivedOptics | null }) {
+  const system = useAppStore((s) => s.system);
   const assemblyEdited = useAppStore((s) => s.assemblyEdited);
+  const { diagram, picker, jumpToFeature } = useDiagramControls();
 
   const [condensed, setCondensed] = useState(false);
   const [barTop, setBarTop] = useState(0);
-  const [pendingAdd, setPendingAdd] = useState<SurfaceNumber | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
   // The bar takes over once the full panel's strip has slid under the sticky
@@ -55,89 +143,14 @@ export function DiagramPanel({ derived }: { derived: DerivedOptics | null }) {
     };
   }, []);
 
-  const coating = system.lites.find((l) => l.coating)?.coating;
-  const frit = system.frit;
-  const canAddCoating = !coating;
-  const canAddFrit = !frit;
   const verdict = derived ? fitVerdict(derived, system.assembly) : null;
-
-  const scrollToCard = (id: string) => {
-    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
-
-  const jumpToFeature = (feature: DiagramFeature) => {
-    scrollToCard(feature === "coating" ? "card-coating" : "card-frit");
-  };
-
-  const addCoating = (surface: SurfaceNumber) => {
-    moveCoatingToSurface(surface);
-    setPendingAdd(null);
-    scrollToCard("card-coating");
-  };
-
-  const addFrit = (surface: SurfaceNumber) => {
-    setFrit(defaultFrit(surface, { r: 0.9, g: 0.9, b: 0.88 }));
-    setPendingAdd(null);
-    scrollToCard("card-frit");
-  };
-
-  const handleAddAt = (surface: SurfaceNumber) => {
-    // With only one kind of feature left to add there is nothing to ask.
-    if (canAddCoating && !canAddFrit) return addCoating(surface);
-    if (canAddFrit && !canAddCoating) return addFrit(surface);
-    setPendingAdd(surface);
-  };
 
   return (
     <>
       <div ref={panelRef} className="border-b border-border-subtle bg-surface">
         <div className="mx-auto max-w-[820px] px-5 py-2.5">
-          <SurfaceDiagram
-            lites={system.lites}
-            gaps={system.gaps}
-            coatingSurface={coating?.surface}
-            fritSurface={frit?.surface}
-            onFeatureClick={jumpToFeature}
-            onAddAt={canAddCoating || canAddFrit ? handleAddAt : undefined}
-            onAddLite={
-              system.lites.length < 3
-                ? () => setLiteCount(system.lites.length + 1)
-                : undefined
-            }
-          />
-
-              {pendingAdd !== null ? (
-                <div className="mt-1.5 flex flex-wrap items-center gap-2 rounded-md border border-accent/40 bg-accent-soft px-3 py-2 text-xs">
-                  <span className="font-medium text-foreground">
-                    Add to surface #{pendingAdd}:
-                  </span>
-                  {canAddCoating ? (
-                    <button
-                      type="button"
-                      onClick={() => addCoating(pendingAdd)}
-                      className="rounded-md border border-accent bg-surface px-2.5 py-1 font-medium text-accent transition hover:bg-accent hover:text-white"
-                    >
-                      Coating
-                    </button>
-                  ) : null}
-                  {canAddFrit ? (
-                    <button
-                      type="button"
-                      onClick={() => addFrit(pendingAdd)}
-                      className="rounded-md border border-warning bg-surface px-2.5 py-1 font-medium text-warning transition hover:bg-warning-soft"
-                    >
-                      Frit
-                    </button>
-                  ) : null}
-                  <button
-                    type="button"
-                    onClick={() => setPendingAdd(null)}
-                    className="ml-auto rounded-md px-2 py-1 text-muted transition hover:text-foreground"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              ) : null}
+          {diagram}
+          {picker}
 
           <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-border-subtle pt-2">
             <NumberStrip muted={!assemblyEdited} />
@@ -161,7 +174,7 @@ export function DiagramPanel({ derived }: { derived: DerivedOptics | null }) {
 }
 
 /** "6 / 12 / 6 mm · low-iron" — the build-up in one phrase. */
-function constructionSummary(system: {
+export function constructionSummary(system: {
   lites: { thickness: number; substrate: string }[];
   gaps: { width: number }[];
 }): string {
@@ -185,7 +198,7 @@ function NumberStrip({ muted = false }: { muted?: boolean }) {
   // sensible starting estimate, not data anyone entered.
   const value = muted ? "font-mono text-muted" : "font-mono text-foreground";
   return (
-    <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted">
+    <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-[13px] text-muted">
       <span>
         VLT <span className={value}>{pct(assembly.tvis)}</span>
       </span>
@@ -207,7 +220,7 @@ export function VerdictChip({
   estimated?: boolean;
 }) {
   if (estimated) {
-    return <span className="text-xs text-muted/80">estimated for this construction</span>;
+    return <span className="text-[13px] text-muted">estimated for this construction</span>;
   }
   if (!verdict) return null;
 
@@ -222,7 +235,7 @@ export function VerdictChip({
 
   if (verdict.tone === "exact") {
     return (
-      <span className="inline-flex items-center gap-1.5 text-xs font-medium text-success">
+      <span className="inline-flex items-center gap-1.5 text-[13px] font-medium text-success">
         <svg viewBox="0 0 12 12" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth={1.5} aria-hidden>
           <circle cx="6" cy="6" r="4.75" />
           <path d="M3.8 6.2 L5.3 7.7 L8.2 4.6" />
@@ -232,10 +245,10 @@ export function VerdictChip({
     );
   }
   if (verdict.tone === "close") {
-    return <span className="text-xs text-muted">{chipText}</span>;
+    return <span className="text-[13px] text-muted">{chipText}</span>;
   }
   return (
-    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-warning">
+    <span className="inline-flex items-center gap-1.5 text-[13px] font-medium text-warning">
       <svg viewBox="0 0 12 12" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth={1.5} aria-hidden>
         <path d="M6 1.5 L11 10.5 L1 10.5 Z" />
         <line x1="6" y1="4.5" x2="6" y2="7.5" />
@@ -273,10 +286,10 @@ function CondensedBar({
           the pinned bar must say. */}
       <div className={verdict && !estimated ? "hidden min-w-0 flex-1 sm:block" : "min-w-0 flex-1"}>
         <div className="flex items-baseline gap-2">
-          <span className="hidden truncate text-[13px] font-semibold text-foreground sm:inline">
+          <span className="hidden truncate text-[15px] font-semibold text-foreground sm:inline">
             {system.name}
           </span>
-          <span className="min-w-0 truncate text-[11px] text-muted sm:shrink-0">
+          <span className="min-w-0 truncate text-[13px] text-muted sm:shrink-0">
             {constructionSummary(system)}
           </span>
         </div>
@@ -286,7 +299,7 @@ function CondensedBar({
               <button
                 type="button"
                 onClick={() => onJump("coating")}
-                className="whitespace-nowrap rounded-full border border-accent bg-accent-soft px-2 py-px text-[10px] font-semibold text-accent transition hover:opacity-80"
+                className="whitespace-nowrap rounded-full border border-accent bg-accent-soft px-2 py-px text-xs font-semibold text-accent transition hover:opacity-80"
               >
                 coating · #{coating.surface}
               </button>
@@ -295,7 +308,7 @@ function CondensedBar({
               <button
                 type="button"
                 onClick={() => onJump("frit")}
-                className="whitespace-nowrap rounded-full border border-warning bg-warning-soft px-2 py-px text-[10px] font-semibold text-warning transition hover:opacity-80"
+                className="whitespace-nowrap rounded-full border border-warning bg-warning-soft px-2 py-px text-xs font-semibold text-warning transition hover:opacity-80"
               >
                 frit · #{frit.surface}
               </button>

@@ -9,7 +9,7 @@ import {
 } from "@/engine";
 import { defaultFrit, useAppStore } from "@/lib/store";
 import { surfaceOptions } from "@/lib/surfaces";
-import { ActionButton, Field, Select } from "@/components/ui/fields";
+import { ActionButton, Field, Section, Select } from "@/components/ui/fields";
 import { CoatingOverridesPanel } from "./CoatingPanel";
 import { FritControls } from "./FritSection";
 
@@ -26,7 +26,7 @@ const COATING_KINDS: { value: CoatingKind; label: string }[] = [
   { value: "other", label: "Other" },
 ];
 
-export function CoatingCard({ derived }: { derived: DerivedOptics | null }) {
+function CoatingCard({ derived }: { derived: DerivedOptics | null }) {
   const system = useAppStore((s) => s.system);
   const updateLite = useAppStore((s) => s.updateLite);
   const setCoating = useAppStore((s) => s.setCoating);
@@ -46,9 +46,8 @@ export function CoatingCard({ derived }: { derived: DerivedOptics | null }) {
     <FeatureCardShell
       id="card-coating"
       title="Coating"
-      number={3}
-      squareClass="bg-accent"
-      borderClass="border-accent/50"
+      titleClass="text-accent"
+      borderClass="border-accent/50 bg-accent-soft/40"
       onRemove={() => setCoating(coatedIndex, undefined)}
     >
       <div className="grid gap-3 sm:grid-cols-[1fr_2fr]">
@@ -71,38 +70,22 @@ export function CoatingCard({ derived }: { derived: DerivedOptics | null }) {
         </Field>
       </div>
 
-      <p className="mt-2 text-xs leading-snug text-muted">
-        Determines where the reflection asymmetry lives; low-e is usually #2. Only one coating is
-        fitted at a time, since the three measured numbers can only pin down one coating&apos;s
-        unknowns. A product with a second coating still exports correctly: the numbers describe
-        the finished assembly either way.
-      </p>
-
       <div className="mt-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 border-t border-border-subtle pt-2.5">
-        <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted">
-          <span className="font-medium">Fitted from your numbers</span>
+        <div className="min-w-0">
+          <p className="text-[13px] text-muted">Fitted from your numbers</p>
           {fitted ? (
-            <>
-              <span>
-                Transmits{" "}
-                <span className="font-mono text-foreground">{pct(luminance(fitted.transmission))}</span>
-              </span>
-              <span>
-                Reflects, out{" "}
-                <span className="font-mono text-foreground">{pct(luminance(fitted.reflectanceExt))}</span>
-              </span>
-              <span>
-                Reflects, in{" "}
-                <span className="font-mono text-foreground">{pct(luminance(fitted.reflectanceInt))}</span>
-              </span>
-            </>
+            <p className="mt-0.5 text-sm text-foreground">
+              Transmits <span className="font-mono">{pct(luminance(fitted.transmission))}</span>,
+              reflects <span className="font-mono">{pct(luminance(fitted.reflectanceExt))}</span> out
+              and <span className="font-mono">{pct(luminance(fitted.reflectanceInt))}</span> in
+            </p>
           ) : (
-            <span>waiting on a solvable construction</span>
+            <p className="mt-0.5 text-sm text-muted">waiting on a solvable construction</p>
           )}
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {overrideCount ? (
-            <span className="text-[11px] text-muted/80">{overrideCount} overridden</span>
+            <span className="text-[13px] text-muted">{overrideCount} overridden</span>
           ) : null}
           <ActionButton onClick={() => setOverridesOpen(!overridesOpen)} active={overridesOpen}>
             {overridesOpen ? "Done" : "Override…"}
@@ -123,7 +106,7 @@ export function CoatingCard({ derived }: { derived: DerivedOptics | null }) {
   );
 }
 
-export function FritCard() {
+function FritCard() {
   const frit = useAppStore((s) => s.system.frit);
   const setFrit = useAppStore((s) => s.setFrit);
 
@@ -133,9 +116,8 @@ export function FritCard() {
     <FeatureCardShell
       id="card-frit"
       title="Frit"
-      number={3}
-      squareClass="bg-warning"
-      borderClass="border-border-subtle"
+      titleClass="text-warning"
+      borderClass="border-warning/50 bg-warning-soft/40"
       onRemove={() => setFrit(undefined)}
     >
       <FritControls />
@@ -146,105 +128,110 @@ export function FritCard() {
 function FeatureCardShell({
   id,
   title,
-  number,
-  squareClass,
+  titleClass,
   borderClass,
   onRemove,
   children,
 }: {
   id: string;
   title: string;
-  number: number;
-  squareClass: string;
+  titleClass: string;
   borderClass: string;
   onRemove: () => void;
   children: ReactNode;
 }) {
   return (
-    <section id={id} className={`scroll-mt-32 rounded-lg border bg-surface p-4 ${borderClass}`}>
+    <div id={id} className={`scroll-mt-32 rounded-xl border p-3.5 lg:scroll-mt-4 ${borderClass}`}>
       <header className="mb-3 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <span className={`h-3 w-3 rounded-sm ${squareClass}`} aria-hidden />
-          <h2 className="text-sm font-semibold text-foreground">
-            <span className="text-accent">{number}</span>
-            <span className="text-muted"> · </span>
-            {title}
-          </h2>
-          <span className="text-[11px] text-muted/80">shown on the diagram</span>
-        </div>
+        <h3 className={`text-[15px] font-semibold ${titleClass}`}>{title}</h3>
         <ActionButton onClick={onRemove} danger>
           Remove
         </ActionButton>
       </header>
       {children}
-    </section>
+    </div>
   );
 }
 
-export function SurfaceFeaturesGhost() {
+/**
+ * Step 3: one header, a card per feature present, and a dashed button for
+ * each feature that could still be added.
+ */
+export function SurfaceFeaturesSection({ derived }: { derived: DerivedOptics | null }) {
   const system = useAppStore((s) => s.system);
   const setFrit = useAppStore((s) => s.setFrit);
   const moveCoatingToSurface = useAppStore((s) => s.moveCoatingToSurface);
 
   const hasCoating = system.lites.some((l) => l.coating);
   const hasFrit = Boolean(system.frit);
-  if (hasCoating && hasFrit) return null;
 
-  const addCoating = () => moveCoatingToSurface(system.lites.length > 1 ? 2 : 1);
-  const addFrit = () =>
-    setFrit(defaultFrit(system.lites.length > 1 ? 2 : 1, { r: 0.9, g: 0.9, b: 0.88 }));
-
-  // Neither feature yet: this ghost IS card 3. One feature present: its real
-  // card carries the number and this shrinks to a one-line add row.
-  if (!hasCoating && !hasFrit) {
-    return (
-      <section className="scroll-mt-32 rounded-lg border border-dashed border-border-strong/60 p-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-foreground">
-              <span className="text-accent">3</span>
-              <span className="text-muted"> · </span>
-              Surface features
-            </p>
-            <p className="mt-0.5 text-xs text-muted">
-              Coating and frit sit on a numbered surface. Most performance glazing has a
-              coating.
-            </p>
-          </div>
-          <div className="flex shrink-0 gap-2">
-            <GhostButton label="Add coating" onClick={addCoating} />
-            <GhostButton label="Add frit" onClick={addFrit} />
-          </div>
-        </div>
-      </section>
-    );
+  const offers: { label: string; onClick: () => void }[] = [];
+  if (!hasCoating) {
+    offers.push({
+      label: "Add coating",
+      onClick: () => moveCoatingToSurface(system.lites.length > 1 ? 2 : 1),
+    });
+  }
+  if (!hasFrit) {
+    offers.push({
+      label: "Add frit",
+      onClick: () =>
+        setFrit(defaultFrit(system.lites.length > 1 ? 2 : 1, { r: 0.9, g: 0.9, b: 0.88 })),
+    });
   }
 
   return (
-    <section className="scroll-mt-32 rounded-lg border border-dashed border-border-strong/60 px-4 py-2.5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-xs text-muted">
-          {hasCoating
-            ? "Frit: ceramic enamel fused to one surface, as dots, lines, or your own pattern file."
-            : "Most performance glazing is coated. Leave it off only for plain tinted or clear glass."}
-        </p>
-        <GhostButton
-          label={hasCoating ? "Add frit" : "Add coating"}
-          onClick={hasCoating ? addFrit : addCoating}
-        />
-      </div>
-    </section>
-  );
-}
-
-function GhostButton({ label, onClick }: { label: string; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="shrink-0 rounded-md border border-border-subtle px-3 py-1.5 text-xs font-medium text-foreground transition hover:border-border-strong"
+    <Section
+      id="card-features"
+      title={
+        <>
+          <span className="text-accent">3</span>
+          <span className="text-muted"> · </span>
+          Surface features
+        </>
+      }
+      helpLabel="surface features"
+      help={
+        <>
+          <p>
+            Coating and frit each sit on a numbered surface.
+            Most performance glazing is coated. Leave the coating off only for plain tinted or
+            clear glass.
+          </p>
+          <p>
+            Coating: the surface decides where the reflection asymmetry lives; low-e is usually
+            #2. Only one coating is fitted at a time, since three measured numbers can only
+            settle one coating&apos;s unknowns. A product with a second coating still exports
+            correctly: the numbers describe the finished assembly either way.
+          </p>
+          <p>Frit: ceramic enamel fused to one surface, as dots, lines, or your own pattern file.</p>
+        </>
+      }
     >
-      {label}
-    </button>
+      <div className="space-y-3">
+        <CoatingCard derived={derived} />
+        <FritCard />
+        {!hasCoating && !hasFrit ? (
+          <p className="text-sm text-muted">Nothing on the glass yet. Most performance glazing has a coating.</p>
+        ) : null}
+        {offers.length ? (
+          <div className="flex flex-wrap gap-2.5">
+            {offers.map((offer) => (
+              <button
+                key={offer.label}
+                type="button"
+                onClick={offer.onClick}
+                className="flex h-10 flex-1 basis-40 items-center justify-center gap-2 rounded-lg border border-dashed border-border-strong text-sm text-foreground transition hover:border-accent hover:text-accent"
+              >
+                <svg viewBox="0 0 14 14" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={1.5} aria-hidden>
+                  <path d="M7 2 V12 M2 7 H12" />
+                </svg>
+                {offer.label}
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    </Section>
   );
 }

@@ -223,12 +223,12 @@ export function FritControls() {
                 </svg>
               )}
               <div className="min-w-0 flex-1">
-                <p className="truncate text-xs font-medium text-foreground">
+                <p className="truncate text-[13px] font-medium text-foreground">
                   {uploadedMask
                     ? uploadedMask.fileName
                     : "Drop your pattern image here, or click to browse"}
                 </p>
-                <p className="text-xs text-muted">
+                <p className="text-[13px] text-muted">
                   {uploadedMask
                     ? "White is frit, black is open glass. Drop a new image to replace it."
                     : "A black-and-white image. White is frit, black is open glass."}
@@ -247,7 +247,7 @@ export function FritControls() {
               event.target.value = "";
             }}
           />
-          {uploadError ? <p className="text-xs text-danger">{uploadError}</p> : null}
+          {uploadError ? <p className="text-[13px] text-danger">{uploadError}</p> : null}
 
           <div className="grid grid-cols-2 items-end gap-3">
             <Field label="Frit color">
@@ -265,7 +265,7 @@ export function FritControls() {
           </div>
 
           <div className="max-w-sm">
-            <Field label="Surface" hint="Tagged in amber on the diagram above.">
+            <Field label="Surface" hint="Tagged in amber on the diagram.">
               <Select
                 value={String(frit.surface)}
                 onChange={(value) => updateFrit({ surface: Number(value) as SurfaceNumber })}
@@ -277,9 +277,78 @@ export function FritControls() {
             </Field>
           </div>
 
-          <p className="text-xs text-muted">
-            Covers {(coverage * 100).toFixed(0)}% of the glass.
-          </p>
+          <div className="flex items-center gap-3 border-t border-border-subtle pt-3">
+            <FritPreview pattern={frit.pattern} color={linearRGBToHex(frit.color)} coverage={coverage} />
+            <p className="text-sm text-muted">
+              Covers <span className="font-mono text-foreground">{(coverage * 100).toFixed(0)}%</span> of
+              the glass. The tile shows the pattern at true proportion, about 70 mm across.
+            </p>
+          </div>
     </div>
+  );
+}
+
+/**
+ * The pattern drawn at true proportion on a 72 mm square of glass, so a typo
+ * in the spacing shows as a wrong-looking tile rather than a wrong render.
+ * A custom map already shows its own image in the drop zone.
+ */
+function FritPreview({
+  pattern,
+  color,
+  coverage,
+}: {
+  pattern: FritPattern;
+  color: string;
+  coverage: number;
+}) {
+  const SIZE = 96;
+  const scale = SIZE / 72;
+  const glass = "#5f7068";
+  let background: React.CSSProperties = { backgroundColor: glass };
+
+  if (pattern.kind === "dots") {
+    const pitch = Math.max(2, pattern.spacing * scale);
+    const radius = Math.min(pitch / 2, (pattern.dotDiameter * scale) / 2);
+    background = {
+      backgroundColor: glass,
+      backgroundImage: `radial-gradient(circle, ${color} 0, ${color} ${radius}px, transparent ${radius + 0.5}px)`,
+      backgroundSize: `${pitch}px ${pitch}px`,
+    };
+  } else if (pattern.kind === "lines") {
+    const pitch = Math.max(2, pattern.spacing * scale);
+    const width = Math.min(pitch, pattern.lineWidth * scale);
+    background = {
+      backgroundColor: glass,
+      backgroundImage: `repeating-linear-gradient(${pattern.orientation === "horizontal" ? "180deg" : "90deg"}, ${color} 0, ${color} ${width}px, transparent ${width}px, transparent ${pitch}px)`,
+    };
+  } else if (pattern.kind === "uniform") {
+    background = {
+      backgroundColor: glass,
+      backgroundImage: `linear-gradient(${color}, ${color})`,
+      backgroundSize: "100% 100%",
+      opacity: 1,
+    };
+    return (
+      <span
+        role="img"
+        aria-label={`Even frit at ${(coverage * 100).toFixed(0)}% coverage`}
+        className="relative block h-24 w-24 shrink-0 overflow-hidden rounded-lg border border-border-strong"
+        style={{ backgroundColor: glass }}
+      >
+        <span className="absolute inset-0" style={{ backgroundColor: color, opacity: coverage }} />
+      </span>
+    );
+  } else {
+    return null;
+  }
+
+  return (
+    <span
+      role="img"
+      aria-label={`Preview of the frit ${pattern.kind} pattern`}
+      className="block h-24 w-24 shrink-0 rounded-lg border border-border-strong"
+      style={background}
+    />
   );
 }

@@ -59,7 +59,7 @@ export {
   naturalAssemblyOptics,
   nominalAssemblyHue,
 } from "./physics/assembly";
-export { SUBSTRATE_LABELS, SUBSTRATE_INTERNAL_T_6MM, GLASS_IOR, DEFAULT_FRIT_OPACITY } from "./physics/constants";
+export { SUBSTRATE_LABELS, SUBSTRATE_INTERNAL_T_6MM, GLASS_IOR, AIR_GLASS_R0, DEFAULT_FRIT_OPACITY } from "./physics/constants";
 export { luminance, hexToLinearRGB, linearRGBToHex, gray, clampRGB } from "./physics/color";
 export { patternCoverage } from "./solve/frit";
 export { MDL_VERSION, TOOL_NAME, TOOL_VERSION } from "./mdl/target";

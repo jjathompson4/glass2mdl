@@ -1,41 +1,31 @@
 "use client";
 
 import { useState } from "react";
-import {
-  buildExport,
-  litePositionNames,
-  luminance,
-  type DerivedOptics,
-  type ExportBundle,
-} from "@/engine";
+import { buildExport, type DerivedOptics, type ExportBundle } from "@/engine";
 import { useAppStore } from "@/lib/store";
 import { downloadBytes } from "@/lib/download";
-import { toDisplay, unitLabel } from "@/lib/units";
 import { ActionButton, Section } from "@/components/ui/fields";
 import { VerdictChip } from "./DiagramPanel";
-import { FIT_QUANTITIES, fitVerdict } from "./fitVerdict";
+import { FitLinePanel } from "./FitLinePanel";
+import { fitVerdict } from "./fitVerdict";
+import { jumpToName } from "./ValidationBanner";
 
 /**
- * The verdict itself lives in the diagram panel, always visible; this card
- * answers "what do I get", with the full entered-versus-produced table and
- * the per-lite split behind one disclosure for anyone who wants the receipts.
+ * What you get: the file list and the one button. A glazing with no name yet
+ * is not an error to shout about on a first visit, so the slot simply asks
+ * for the name and offers to take you to the field.
  */
-export function ResultSection({
-  derived,
+export function DownloadBlock({
   bundle,
   blocked,
 }: {
-  derived: DerivedOptics | null;
   bundle: ExportBundle | null;
   blocked: boolean;
 }) {
   const system = useAppStore((s) => s.system);
   const mode = useAppStore((s) => s.mode);
-  const [showDetails, setShowDetails] = useState(false);
   const [error, setError] = useState<string>();
-
-  const assemblyEdited = useAppStore((s) => s.assemblyEdited);
-  const verdict = derived ? fitVerdict(derived, system.assembly) : null;
+  const nameMissing = system.name.trim() === "";
 
   const handleDownload = () => {
     setError(undefined);
@@ -47,192 +37,103 @@ export function ResultSection({
     }
   };
 
+  if (nameMissing) {
+    return (
+      <div className="flex h-full flex-col justify-between gap-3">
+        <p className="text-sm leading-snug text-muted">
+          Give the glazing a name to build the files. It becomes the material and file name.
+        </p>
+        <button
+          type="button"
+          onClick={jumpToName}
+          className="h-12 w-full rounded-[10px] border border-accent text-base font-semibold text-accent transition hover:bg-accent-soft"
+        >
+          Name the glazing
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-full flex-col justify-between gap-3">
+      {bundle ? (
+        <ul className="space-y-0.5 font-mono text-xs text-muted">
+          {bundle.files.map((file) => (
+            <li key={file.fileName} className="flex justify-between gap-3">
+              <span className="truncate text-foreground">{file.fileName}</span>
+              <span className="shrink-0">{formatBytes(file.bytes.byteLength)}</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-sm leading-snug text-muted">
+          The files are built once the items listed under the form are fixed.
+        </p>
+      )}
+
+      <div>
+        <button
+          type="button"
+          onClick={handleDownload}
+          disabled={blocked}
+          className="flex h-12 w-full items-center justify-center gap-2.5 rounded-[10px] bg-accent text-base font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <svg viewBox="0 0 18 18" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth={1.75} aria-hidden>
+            <path d="M9 2.5 V11.5 M5 8 L9 12 L13 8 M3 15 H15" />
+          </svg>
+          {blocked ? "Fix the errors to download" : "Download ZIP"}
+        </button>
+        {error ? <p className="mt-2 text-[13px] text-danger">{error}</p> : null}
+        <p className="mt-2 text-[13px] leading-snug text-muted">
+          The README inside says which material goes on which face. For solid lites, the included
+          Python script assigns them for you.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The phone layout's closing card. On a desktop the result pane carries all
+ * of this beside the form instead.
+ */
+export function ResultSection({
+  derived,
+  bundle,
+  blocked,
+}: {
+  derived: DerivedOptics | null;
+  bundle: ExportBundle | null;
+  blocked: boolean;
+}) {
+  const assembly = useAppStore((s) => s.system.assembly);
+  const assemblyEdited = useAppStore((s) => s.assemblyEdited);
+  const [showDetails, setShowDetails] = useState(false);
+  const verdict = derived ? fitVerdict(derived, assembly) : null;
+
   return (
     <Section id="card-download" title="Download">
       {derived && verdict ? (
-        <div className="rounded-md border border-border-subtle p-3">
+        <div className="mb-4 rounded-[10px] border border-border-subtle p-3">
           <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
             <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-              <p className="text-[13px] font-medium text-foreground">Fit check</p>
+              <p className="text-[15px] font-medium text-foreground">Fit check</p>
               <VerdictChip verdict={verdict} estimated={!assemblyEdited} />
             </div>
             <ActionButton onClick={() => setShowDetails(!showDetails)} active={showDetails}>
-              {showDetails ? "Done" : "Details…"}
+              {showDetails ? "Done" : "How the fit gets there"}
             </ActionButton>
           </div>
-          <p className="mt-1 text-xs leading-snug text-muted">
-            This app is solving for per-lite material properties based on the data you enter
-            from the glazing data sheet. Any discrepancies will be visible here.
-          </p>
           {showDetails ? (
             <div className="mt-3 border-t border-border-subtle pt-3">
-              <FitTable derived={derived} assembly={system.assembly} />
-              <FitDetails derived={derived} />
+              <FitLinePanel derived={derived} />
             </div>
           ) : null}
         </div>
       ) : null}
 
-      {bundle ? (
-        <ul className="mt-3 space-y-1 rounded-md bg-surface-sunken p-2.5 font-mono text-[11px] text-muted">
-          {bundle.files.map((file) => (
-            <li key={file.fileName} className="flex justify-between gap-2">
-              <span className="truncate text-foreground">{file.fileName}</span>
-              <span>{formatBytes(file.bytes.byteLength)}</span>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-
-      <button
-        type="button"
-        onClick={handleDownload}
-        disabled={blocked}
-        className="mt-3 w-full rounded-md bg-accent px-3 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
-      >
-        {blocked ? "Fix the errors above to download" : "Download ZIP"}
-      </button>
-
-      {error ? <p className="mt-2 text-xs text-danger">{error}</p> : null}
-
-      <p className="mt-2 text-[11px] leading-snug text-muted">
-        The README says which material goes on which plane, with face normals pointing outward.
-        If working with solid lite geometry, use the Python script included in the ZIP file to
-        automate material assignments.
-      </p>
-      <p className="mt-1.5 border-t border-border-subtle pt-2 text-[11px] leading-snug text-muted/80">
-        In-app preview coming soon.
-      </p>
+      <DownloadBlock bundle={bundle} blocked={blocked} />
     </Section>
-  );
-}
-
-function FitTable({
-  derived,
-  assembly,
-}: {
-  derived: DerivedOptics;
-  assembly: { tvis: number; rvisExt: number; rvisInt: number };
-}) {
-  const residual = derived.residual;
-  const anyOff = residual.max >= 0.02;
-
-  return (
-    <div>
-      <div className="grid max-w-sm grid-cols-[1fr_auto_auto] gap-x-3 gap-y-1 text-xs text-muted sm:grid-cols-[1fr_76px_76px]">
-        <span />
-        <span className="font-medium">entered</span>
-        <span className="font-medium">produced</span>
-        {FIT_QUANTITIES.map(({ key, produced, label }) => {
-          const off = Math.abs(residual[key]) >= 0.02;
-          return (
-            <FitRow
-              key={key}
-              label={label}
-              entered={assembly[key]}
-              produced={luminance(derived.recomputed[produced])}
-              highlight={off}
-            />
-          );
-        })}
-      </div>
-
-      {anyOff ? (
-        <p className="mt-2 text-xs leading-snug text-muted">
-          The fit returns the closest achievable values instead. Usually this means the entered
-          numbers belong to a different construction. Check the lite count, the coated surface,
-          and the substrate tints against the data sheet.
-        </p>
-      ) : null}
-    </div>
-  );
-}
-
-function FitRow({
-  label,
-  entered,
-  produced,
-  highlight,
-}: {
-  label: string;
-  entered: number;
-  produced: number;
-  highlight: boolean;
-}) {
-  const cls = highlight ? "text-warning" : "";
-  return (
-    <>
-      <span className={cls}>{label}</span>
-      <span className={`tabular-nums ${cls}`}>{(entered * 100).toFixed(1)}%</span>
-      <span className={`tabular-nums ${highlight ? "font-semibold text-warning" : "text-foreground"}`}>
-        {(produced * 100).toFixed(1)}%
-      </span>
-    </>
-  );
-}
-
-function FitDetails({ derived }: { derived: DerivedOptics }) {
-  const lites = useAppStore((s) => s.system.lites);
-  const unit = useAppStore((s) => s.unit);
-  const positions = litePositionNames(lites.length);
-  const coating = derived.coating;
-  const exampleSigma = luminance(derived.lites[0].absorptionCoefficient);
-  const exampleThickness = lites[0].thickness;
-  const examplePct = (1 - Math.exp(-exampleSigma * (exampleThickness / 1000))) * 100;
-  const exampleLabel = `${toDisplay(exampleThickness, unit)}${unitLabel(unit)}`;
-
-  return (
-    <div className="mt-3 border-t border-border-subtle pt-3">
-      <p className="text-xs leading-snug text-muted">
-        One set of assembly numbers becomes per-lite properties. These are the values baked into
-        each downloaded material:
-      </p>
-
-      <div className="mt-2 grid grid-cols-[auto_1fr_auto] gap-x-3 gap-y-1.5 border-t border-border-subtle pt-2 text-xs sm:grid-cols-[96px_1fr_86px]">
-        <span />
-        <span />
-        <span className="font-medium text-muted/80">absorption</span>
-        {derived.lites.map((lite, i) => {
-          const isCoated = coating && Math.floor((coating.surface - 1) / 2) === i;
-          return (
-            <LiteRow
-              key={lite.index}
-              name={`Lite ${i + 1} · ${positions[i]}`}
-              text={`${isCoated ? "coated" : "bare glass"}, body passes ${(luminance(lite.internalTransmittance) * 100).toFixed(0)}%`}
-              sigma={luminance(lite.absorptionCoefficient)}
-            />
-          );
-        })}
-        {coating ? (
-          <>
-            <span className="font-medium text-foreground">Coating · #{coating.surface}</span>
-            <span className="text-muted">
-              transmits {(luminance(coating.transmission) * 100).toFixed(0)}% · reflects{" "}
-              {(luminance(coating.reflectanceExt) * 100).toFixed(0)}% out /{" "}
-              {(luminance(coating.reflectanceInt) * 100).toFixed(0)}% in
-            </span>
-            <span />
-          </>
-        ) : null}
-      </div>
-
-      <p className="mt-2 border-t border-border-subtle pt-2 text-[11px] leading-snug text-muted/80">
-        Absorption is how strongly the glass body soaks up light per meter traveled:{" "}
-        {exampleSigma.toFixed(1)} /m across a {exampleLabel} lite absorbs about{" "}
-        {examplePct.toFixed(0)}%. It is the value baked into each solid material&apos;s
-        volume; a coated lite&apos;s download folds the coating&apos;s absorption in as well.
-      </p>
-    </div>
-  );
-}
-
-function LiteRow({ name, text, sigma }: { name: string; text: string; sigma: number }) {
-  return (
-    <>
-      <span className="font-medium text-foreground">{name}</span>
-      <span className="text-muted">{text}</span>
-      <span className="font-mono tabular-nums text-muted">{sigma.toFixed(1)} /m</span>
-    </>
   );
 }
 
