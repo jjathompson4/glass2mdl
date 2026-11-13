@@ -122,7 +122,7 @@ export function FitLinePanel({ derived }: { derived: DerivedOptics }) {
     <div className="space-y-4">
       <div>
         <h3 className="text-lg font-semibold tracking-tight text-foreground">
-          How the fit gets there
+          Fit check
         </h3>
         <p className="mt-1 max-w-[640px] text-sm leading-snug text-muted">
           Light arriving from outside, followed through the build-up. Blue steps are values the
