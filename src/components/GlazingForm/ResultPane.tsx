@@ -28,7 +28,9 @@ export function ResultPane({
   const system = useAppStore((s) => s.system);
   const assemblyEdited = useAppStore((s) => s.assemblyEdited);
   const { diagram, picker } = useDiagramControls(true);
-  const [fitOpen, setFitOpen] = useState(false);
+  // Open by default: the fit check is the proof the numbers were met, so it
+  // should not need finding. It can still be folded away.
+  const [fitOpen, setFitOpen] = useState(true);
 
   const verdict = derived ? fitVerdict(derived, system.assembly) : null;
   const coating = system.lites.find((l) => l.coating)?.coating;
@@ -84,6 +86,15 @@ export function ResultPane({
         })}
       </div>
 
+      <div className="grid gap-3 xl:grid-cols-2">
+        <div className="rounded-xl border border-border-subtle px-4 py-3.5">
+          <GlassColorSummary />
+        </div>
+        <div className="rounded-xl border border-border-subtle bg-surface px-4 py-3.5">
+          <DownloadBlock bundle={bundle} blocked={blocked} />
+        </div>
+      </div>
+
       <VerdictLine
         derived={derived}
         verdict={verdict}
@@ -93,15 +104,6 @@ export function ResultPane({
       />
 
       {fitOpen && derived ? <FitLinePanel derived={derived} /> : null}
-
-      <div className="grid gap-3 xl:grid-cols-2">
-        <div className="rounded-xl border border-border-subtle px-4 py-3.5">
-          <GlassColorSummary />
-        </div>
-        <div className="rounded-xl border border-border-subtle bg-surface px-4 py-3.5">
-          <DownloadBlock bundle={bundle} blocked={blocked} />
-        </div>
-      </div>
     </div>
   );
 }
@@ -127,8 +129,8 @@ function VerdictLine({
     );
   }
   const fitButton = (
-    <ActionButton onClick={onToggleFit} active={fitOpen}>
-      {fitOpen ? "Done" : "How the fit gets there"}
+    <ActionButton onClick={onToggleFit}>
+      {fitOpen ? "Hide fit check" : "Show fit check"}
     </ActionButton>
   );
   if (estimated) {

@@ -120,8 +120,8 @@ export function ResultSection({
               <p className="text-[15px] font-medium text-foreground">Fit check</p>
               <VerdictChip verdict={verdict} estimated={!assemblyEdited} />
             </div>
-            <ActionButton onClick={() => setShowDetails(!showDetails)} active={showDetails}>
-              {showDetails ? "Done" : "How the fit gets there"}
+            <ActionButton onClick={() => setShowDetails(!showDetails)}>
+              {showDetails ? "Hide" : "Show"}
             </ActionButton>
           </div>
           {showDetails ? (
