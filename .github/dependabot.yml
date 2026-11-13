@@ -1,0 +1,25 @@
+# Keeps dependencies from drifting: the site once sat on a Next.js release
+# with critical advisories because nothing flagged it.
+#
+# Minor and patch updates arrive as one grouped pull request a week. Major
+# versions come separately, one package each, because they can break things
+# (Next.js in particular) and deserve their own look. Security fixes are
+# opened as soon as an advisory lands, regardless of this schedule.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
