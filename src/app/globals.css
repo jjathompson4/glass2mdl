@@ -16,6 +16,9 @@
   --warning-soft: #fdf4e0;
   --success: #2e7d32;
   --success-soft: #f0f8f1;
+  /* Light on the diagram: the transmission line and the reflectance bounces.
+     Redder than the frit amber so the two never read as the same thing. */
+  --light: #d2601a;
 }
 
 /*
@@ -40,6 +43,7 @@
     --warning-soft: #241d10;
     --success: #6fbf73;
     --success-soft: #14241a;
+    --light: #ff8a3d;
   }
 }
 
@@ -59,6 +63,7 @@
   --warning-soft: #241d10;
   --success: #6fbf73;
   --success-soft: #14241a;
+  --light: #ff8a3d;
 }
 
 /* Native controls (colour pickers, range thumbs) follow the chosen theme. */
@@ -85,6 +90,7 @@
   --color-warning-soft: var(--warning-soft);
   --color-success: var(--success);
   --color-success-soft: var(--success-soft);
+  --color-light: var(--light);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }

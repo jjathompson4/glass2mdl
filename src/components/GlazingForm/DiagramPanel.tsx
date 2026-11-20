@@ -111,7 +111,19 @@ export function useDiagramControls(large = false) {
       </div>
     ) : null;
 
-  return { diagram, picker, jumpToFeature };
+  /** The same wiring as raw props, for the result pane's combined diagram. */
+  const controls = {
+    lites: system.lites,
+    gaps: system.gaps,
+    coatingSurface: coating?.surface,
+    coatingKind: coating?.kind,
+    fritSurface: frit?.surface,
+    onFeatureClick: jumpToFeature,
+    onAddAt: canAddCoating || canAddFrit ? handleAddAt : undefined,
+    onAddLite: system.lites.length < 3 ? () => setLiteCount(system.lites.length + 1) : undefined,
+  };
+
+  return { diagram, picker, jumpToFeature, controls };
 }
 
 export function DiagramPanel({ derived }: { derived: DerivedOptics | null }) {
