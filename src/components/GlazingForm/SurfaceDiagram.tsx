@@ -55,7 +55,7 @@ interface Layout {
  * really is twice a 6mm lite — so the drawing reads as a section rather than a
  * diagram. Only an unusually deep build-up falls back to shrinking to fit.
  */
-function layout(
+export function layout(
   lites: LiteInput[],
   gaps: GapInput[],
   viewWidth = VIEWBOX_WIDTH,

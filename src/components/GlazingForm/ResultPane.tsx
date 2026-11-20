@@ -1,14 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { luminance, type DerivedOptics, type ExportBundle } from "@/engine";
+import type { DerivedOptics, ExportBundle } from "@/engine";
 import { useAppStore } from "@/lib/store";
 import { ActionButton } from "@/components/ui/fields";
 import { constructionSummary, useDiagramControls } from "./DiagramPanel";
 import { FitLinePanel } from "./FitLinePanel";
 import { GlassColorSummary } from "./GlassColorPanel";
 import { DownloadBlock } from "./ResultSection";
-import { FIT_QUANTITIES, fitVerdict, type FitVerdict } from "./fitVerdict";
+import { fitVerdict, type FitVerdict } from "./fitVerdict";
+import { LightDiagram } from "./LightDiagram";
 
 /**
  * The desktop layout's right-hand pane: everything the form produces, on
@@ -27,10 +28,13 @@ export function ResultPane({
 }) {
   const system = useAppStore((s) => s.system);
   const assemblyEdited = useAppStore((s) => s.assemblyEdited);
-  const { diagram, picker } = useDiagramControls(true);
+  const { picker, controls } = useDiagramControls(true);
   // Open by default: the fit check is the proof the numbers were met, so it
   // should not need finding. It can still be folded away.
   const [fitOpen, setFitOpen] = useState(true);
+  // The light layer is on by default; off leaves the plain builder.
+  const [light, setLight] = useState(true);
+  const { onAddLite, ...diagramProps } = controls;
 
   const verdict = derived ? fitVerdict(derived, system.assembly) : null;
   const coating = system.lites.find((l) => l.coating)?.coating;
@@ -50,41 +54,67 @@ export function ResultPane({
             {[constructionSummary(system).replace(" · ", ", "), ...features].join(", ")}
           </span>
         </div>
-        <span className="text-[13px] text-muted">
-          Drawn to scale. Click + on a surface to add a coating or frit.
-        </span>
       </div>
 
-      <div className="flex min-h-[260px] flex-1 flex-col justify-center rounded-xl border border-border-subtle bg-surface px-4 py-3">
-        {diagram}
-        {picker}
-      </div>
+      <div className="flex min-h-[300px] flex-1 flex-col rounded-xl border border-border-subtle bg-surface">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-border-subtle px-4 py-2">
+          <span className="text-[13px] text-muted">
+            Drawn to scale. Click a surface number to add a coating or frit.
+          </span>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={light}
+            onClick={() => setLight(!light)}
+            className="flex h-9 items-center gap-2.5 text-sm text-foreground"
+          >
+            Light transmission
+            <span className={`relative h-[22px] w-[38px] rounded-full transition ${light ? "bg-accent" : "bg-border-strong"}`}>
+              <span
+                className={`absolute top-[3px] h-4 w-4 rounded-full bg-white transition-all ${light ? "left-[19px]" : "left-[3px]"}`}
+              />
+            </span>
+          </button>
+        </div>
 
-      <div className="grid grid-cols-3 gap-3">
-        {FIT_QUANTITIES.map(({ key, produced, label }) => {
-          const entered = system.assembly[key];
-          const made = derived ? luminance(derived.recomputed[produced]) : null;
-          const off = derived ? Math.abs(derived.residual[key]) >= 0.02 : false;
-          return (
-            <div
-              key={key}
-              className={`rounded-xl border bg-surface px-4 py-3.5 ${off ? "border-warning/60" : "border-border-subtle"}`}
+        <div className="flex flex-1 flex-col justify-center px-3 py-2">
+          <LightDiagram
+            {...diagramProps}
+            derived={derived}
+            entered={system.assembly}
+            showEntered={assemblyEdited}
+            light={light}
+          />
+          {picker}
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-border-subtle px-4 py-2">
+          {light && derived ? (
+            <span className="flex items-center gap-2 text-[13px] text-muted">
+              <span className="h-1 w-6 rounded-full bg-light" aria-hidden />
+              Orange shows where the light goes: through the glass, or reflected back.
+            </span>
+          ) : (
+            <span className="text-[13px] text-muted">
+              {derived ? "Light transmission is hidden." : "Nothing to draw the light from yet."}
+            </span>
+          )}
+          {onAddLite ? (
+            <button
+              type="button"
+              onClick={onAddLite}
+              className="flex h-9 items-center gap-1.5 rounded-lg border border-dashed border-border-strong px-3 text-[13px] text-foreground transition hover:border-accent hover:text-accent"
             >
-              <p className="text-[13px] text-muted">{label === "Transmittance" ? "Transmittance (VLT)" : label}</p>
-              <p
-                className={`mt-1 font-mono text-[34px] font-medium leading-[1.1] tracking-tight tabular-nums ${
-                  off ? "text-warning" : made === null ? "text-muted" : "text-foreground"
-                }`}
-              >
-                {made === null ? "–" : `${(made * 100).toFixed(1)}%`}
-              </p>
-              <p className="mt-0.5 text-[13px] text-muted">
-                {assemblyEdited ? "you entered" : "starting estimate"} {(entered * 100).toFixed(1)}%
-              </p>
-            </div>
-          );
-        })}
+              <svg viewBox="0 0 14 14" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth={1.5} aria-hidden>
+                <path d="M7 2 V12 M2 7 H12" />
+              </svg>
+              Add lite
+            </button>
+          ) : null}
+        </div>
       </div>
+
+      <VerdictLine derived={derived} verdict={verdict} estimated={!assemblyEdited} />
 
       <div className="grid gap-3 xl:grid-cols-2">
         <div className="rounded-xl border border-border-subtle px-4 py-3.5">
@@ -95,15 +125,17 @@ export function ResultPane({
         </div>
       </div>
 
-      <VerdictLine
-        derived={derived}
-        verdict={verdict}
-        estimated={!assemblyEdited}
-        fitOpen={fitOpen}
-        onToggleFit={() => setFitOpen(!fitOpen)}
-      />
-
-      {fitOpen && derived ? <FitLinePanel derived={derived} /> : null}
+      {derived ? (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-[17px] font-semibold text-foreground">Fit check</h3>
+            <ActionButton onClick={() => setFitOpen(!fitOpen)}>
+              {fitOpen ? "Hide fit check" : "Show fit check"}
+            </ActionButton>
+          </div>
+          {fitOpen ? <FitLinePanel derived={derived} cardsOnly /> : null}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -112,14 +144,10 @@ function VerdictLine({
   derived,
   verdict,
   estimated,
-  fitOpen,
-  onToggleFit,
 }: {
   derived: DerivedOptics | null;
   verdict: FitVerdict | null;
   estimated: boolean;
-  fitOpen: boolean;
-  onToggleFit: () => void;
 }) {
   if (!derived || !verdict) {
     return (
@@ -128,18 +156,12 @@ function VerdictLine({
       </div>
     );
   }
-  const fitButton = (
-    <ActionButton onClick={onToggleFit}>
-      {fitOpen ? "Hide fit check" : "Show fit check"}
-    </ActionButton>
-  );
   if (estimated) {
     return (
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border-subtle px-4 py-3">
         <p className="text-[15px] text-muted">
           A starting estimate for this construction. Type your data sheet values in step 1.
         </p>
-        {fitButton}
       </div>
     );
   }
@@ -159,7 +181,6 @@ function VerdictLine({
             </p>
           </div>
         </div>
-        {fitButton}
       </div>
     );
   }
@@ -172,7 +193,6 @@ function VerdictLine({
         </svg>
         <p className="text-[15px] font-medium">{verdict.title}.</p>
       </div>
-      {fitButton}
     </div>
   );
 }

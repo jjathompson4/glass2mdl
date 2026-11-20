@@ -41,7 +41,14 @@ const COATING_NAMES: Record<string, string> = {
 
 const pct = (v: number, digits = 1) => `${(v * 100).toFixed(digits)}%`;
 
-export function FitLinePanel({ derived }: { derived: DerivedOptics }) {
+export function FitLinePanel({
+  derived,
+  cardsOnly = false,
+}: {
+  derived: DerivedOptics;
+  /** The desktop diagram already draws the light, so only the cards remain. */
+  cardsOnly?: boolean;
+}) {
   const system = useAppStore((s) => s.system);
   const unit = useAppStore((s) => s.unit);
   const assemblyEdited = useAppStore((s) => s.assemblyEdited);
@@ -120,6 +127,8 @@ export function FitLinePanel({ derived }: { derived: DerivedOptics }) {
 
   return (
     <div className="space-y-4">
+      {cardsOnly ? null : (
+        <>
       <div>
         <h3 className="text-lg font-semibold tracking-tight text-foreground">
           Fit check
@@ -324,6 +333,9 @@ export function FitLinePanel({ derived }: { derived: DerivedOptics }) {
             : null}
         </p>
       </div>
+
+        </>
+      )}
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {derived.lites.map((lite, i) => {
